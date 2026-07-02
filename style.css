@@ -8,48 +8,57 @@ html, body {
   overflow: hidden;
 }
 
-/* ====== CONTENEUR HORIZONTAL ====== */
+/* ================================================================
+   CONTENEUR HORIZONTAL — collé en bas
+================================================================ */
 #chat-container {
-  position: absolute;
+  position: fixed;
   bottom: 0; left: 0; right: 0;
   display: flex;
   flex-direction: row;
   align-items: flex-end;
   gap: var(--gap, 12px);
-  padding: 0 10px 10px;
+  padding: 0 14px 12px;
   overflow: hidden;
   flex-wrap: nowrap;
 }
 
-/* ====== CARTE MESSAGE ====== */
+/* ================================================================
+   CARTE — structure : [AVATAR] [TOPLINE][BULLE]
+   Avatar chevauche la topline, topline chevauche la bulle
+================================================================ */
 .chat-msg {
   display: flex;
   flex-direction: row;
-  align-items: center;
+  align-items: center;   /* centrage vertical avatar + bloc texte */
   flex-shrink: 0;
-  animation: msgIn .35s cubic-bezier(.22,1,.36,1) both;
+  position: relative;
+  animation: msgIn .32s cubic-bezier(.22,1,.36,1) both;
+  filter: drop-shadow(0 4px 14px rgba(0,0,0,.30));
 }
 .chat-msg.removing {
-  animation: msgOut .3s ease-in forwards;
+  animation: msgOut .32s ease-in forwards;
   pointer-events: none;
 }
 
-/* ====== AVATAR ====== */
+/* ================================================================
+   AVATAR — cercle parfait
+================================================================ */
 .chat-avatar {
   flex-shrink: 0;
-  width: var(--av-size, 62px);
-  height: var(--av-size, 62px);
-  border-radius: 50%;
-  border: 2px solid var(--av-border, rgba(255,255,255,0.85));
+  width:  var(--av-size, 56px);
+  height: var(--av-size, 56px);
+  border-radius: 50%;            /* ← cercle parfait */
+  border: 2.5px solid var(--av-border, rgba(255,255,255,0.85));
   overflow: hidden;
   background: var(--av-bg, #AA4DDA);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: -4px;
-  z-index: 2;
+  /* L'avatar chevauche la topline par-dessous */
+  margin-right: calc(var(--av-size, 56px) * -0.22);
+  z-index: 4;
   position: relative;
-  flex-shrink: 0;
 }
 .chat-avatar img {
   width: 100%; height: 100%;
@@ -57,109 +66,136 @@ html, body {
 }
 .chat-avatar .av-init {
   font-family: var(--font, 'Barlow Condensed', sans-serif);
-  font-size: calc(var(--av-size, 62px) * 0.4);
+  font-size: calc(var(--av-size, 56px) * 0.42);
   font-weight: 700;
   font-style: normal;
   color: var(--av-color, #fff);
   text-transform: uppercase;
   line-height: 1;
   user-select: none;
+  pointer-events: none;
 }
 
-/* ====== BULLE ====== */
-.chat-bubble {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  background: var(--msg-bg, rgba(10,16,40,0.85));
-  border-left: var(--border-w, 12px) solid var(--border-col, #039BEF);
-  border-radius: 0 6px 6px 0;
-  padding: 5px 14px 7px 10px;
-  min-width: 80px;
-  max-width: var(--msg-max-w, 300px);
+/* ================================================================
+   TOPLINE — bloc coloré avec badges + pseudo
+   Chevauche la bulle à droite (margin-right négatif)
+================================================================ */
+.chat-topline {
+  flex-shrink: 0;
+  display: inline-flex;
+  flex-direction: column;   /* badges au-dessus, nom en-dessous */
+  align-items: flex-start;
+  justify-content: center;
+  background: var(--border-col, #039BEF);
+  border-radius: 8px;
+  padding: 5px 20px 5px 10px;
+  /* Chevauche la bulle */
+  margin-right: -14px;
+  z-index: 3;
   position: relative;
-  z-index: 1;
+  min-width: 0;
+  gap: 2px;
 }
 
-/* ====== LIGNE USERNAME ====== */
-.chat-meta {
+/* badges row */
+.chat-badges {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-bottom: 2px;
-  flex-wrap: nowrap;
-  overflow: hidden;
-}
-.chat-badges {
-  display: flex; align-items: center; gap: 2px; flex-shrink: 0;
+  gap: 3px;
+  flex-shrink: 0;
 }
 .chat-badges img.badge {
-  width: var(--badge-sz, 20px);
-  height: var(--badge-sz, 20px);
-  vertical-align: middle;
+  width:  var(--badge-sz, 18px);
+  height: var(--badge-sz, 18px);
   object-fit: contain;
+  display: block;
+  flex-shrink: 0;
 }
+
+/* pseudo */
 .chat-name {
   font-family: var(--font, 'Barlow Condensed', sans-serif);
-  font-size: var(--name-size, 22px);
-  font-weight: 700;
-  font-style: italic;
-  color: var(--name-color, #039BEF);
+  font-size:   var(--name-size, 22px);
+  font-weight: 800;
+  font-style:  italic;
+  color:       var(--name-color, #ffffff);
   text-transform: var(--name-transform, none);
+  white-space: nowrap;
+  line-height: 1.1;
+  letter-spacing: 0.3px;
+}
+
+/* ================================================================
+   BULLE — texte du message
+================================================================ */
+.chat-bubble {
+  flex: 1 1 auto;
+  min-width: 60px;
+  max-width: var(--msg-max-w, 280px);
+  background: var(--msg-bg, rgba(10,16,40,0.88));
+  border-radius: 8px;
+  padding: 7px 14px 7px 22px;  /* padding-left large pour laisser place à la topline qui chevauche */
+  display: flex;
+  align-items: center;
+  position: relative;
+  z-index: 2;
+}
+
+/* ================================================================
+   TEXTE MESSAGE
+================================================================ */
+.chat-text {
+  font-family: var(--font, 'Barlow Condensed', sans-serif);
+  font-size:   var(--msg-size, 20px);
+  font-weight: 400;
+  color:       var(--msg-color, #CDEDF2);
+  line-height: 1.3;
+  word-break:  break-word;
+  display:     flex;
+  flex-wrap:   wrap;
+  align-items: center;
+  gap: 3px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.1;
-  letter-spacing: 0.2px;
-}
-
-/* ====== TEXTE MESSAGE ====== */
-.chat-text {
-  font-family: var(--font, 'Barlow Condensed', sans-serif);
-  font-size: var(--msg-size, 20px);
-  font-weight: 400;
-  font-style: normal;
-  color: var(--msg-color, #CDEDF2);
-  line-height: 1.3;
-  word-break: break-word;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 3px;
 }
 .chat-text img.emote {
   height: calc(var(--msg-size, 20px) * 1.5);
   width: auto;
   vertical-align: middle;
   display: inline-block;
+  flex-shrink: 0;
 }
 
-/* ====== ANIMATIONS ====== */
+/* ================================================================
+   ANIMATIONS
+================================================================ */
 @keyframes msgIn {
-  from { opacity: 0; transform: translateX(-20px); }
-  to   { opacity: 1; transform: translateX(0); }
+  from { opacity: 0; transform: translateX(-18px) scale(.96); }
+  to   { opacity: 1; transform: translateX(0)     scale(1);   }
 }
 @keyframes msgOut {
-  from { opacity: 1; transform: translateX(0) scale(1); }
-  to   { opacity: 0; transform: translateX(18px) scale(.96); }
+  from { opacity: 1; transform: translateX(0)     scale(1);   }
+  to   { opacity: 0; transform: translateX(14px)  scale(.95); }
 }
 
-/* ====== CSS VARS ROOT ====== */
+/* ================================================================
+   CSS CUSTOM PROPERTIES (valeurs par défaut)
+================================================================ */
 :root {
-  --font: 'Barlow Condensed', sans-serif;
-  --av-size: 62px;
-  --av-bg: #AA4DDA;
-  --av-border: rgba(255,255,255,0.85);
-  --av-color: #fff;
-  --badge-sz: 20px;
-  --name-color: #039BEF;
-  --name-size: 22px;
+  --font:          'Barlow Condensed', sans-serif;
+  --av-size:       56px;
+  --av-bg:         #AA4DDA;
+  --av-border:     rgba(255,255,255,0.85);
+  --av-color:      #fff;
+  --badge-sz:      18px;
+  --name-color:    #ffffff;
+  --name-size:     22px;
   --name-transform: none;
-  --msg-color: #CDEDF2;
-  --msg-size: 20px;
-  --msg-bg: rgba(10,16,40,0.85);
-  --border-w: 12px;
-  --border-col: #039BEF;
-  --gap: 12px;
-  --msg-max-w: 300px;
+  --msg-color:     #CDEDF2;
+  --msg-size:      20px;
+  --msg-bg:        rgba(10,16,40,0.88);
+  --border-col:    #039BEF;
+  --gap:           12px;
+  --msg-max-w:     280px;
 }
