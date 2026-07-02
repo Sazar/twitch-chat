@@ -1,175 +1,245 @@
 /*
-  ╔══════════════════════════════════════════════════════════╗
-  ║   Horizontal Twitch Chat — StreamElements Widget v3      ║
-  ╚══════════════════════════════════════════════════════════╝
+ ================================================================
+  Horizontal Twitch Chat — StreamElements Widget
+  Basé sur la structure réelle SE (copiée depuis chat-flow):
+
+  onEventReceived:
+    obj.detail.listener = 'message'
+    obj.detail.event    = { data: { ... } }  ← ou directement event
+
+  Champs du message (dans data = event.data || event) :
+    data.displayName || data.nick || data.name  → pseudo affiché
+    data.displayColor || data.color             → couleur twitch
+    data.text                                   → texte brut
+    data.emotes   → [{id, start, end, urls:{1,2,4}}]  (tableau)
+    data.badges   → [{image_url_1x, imageUrl1x, url, image}]
+ ================================================================
 */
 
-const CFG = {
-  hideAfter: 0,
-  hideCmds: true,
-  showAvatars: true,
-  fitContent: true,
-  avatarMode: 'twitch',
-  avSize: 62,
-  avBg: '#AA4DDA',
-  avInitColor: '#ffffff',
-  avBorder: 'rgba(255,255,255,0.9)',
-  showBadges: true,
-  badgeSz: 20,
-  nameTransform: 'none',
-  nameColorType: 'custom',
-  nameColor: '#039BEF',
-  nameShadow: '',
-  msgColor: '#CDEDF2',
-  msgBg: 'rgba(15,20,45,0.82)',
-  nameSz: 22,
-  msgSz: 20,
-  borderW: 12,
-  borderCol: '#039BEF',
-  rtl: false,
-  font: 'Barlow Condensed',
-  gap: 12,
-  maxMsgs: 8,
-  enableTestMessages: false
-};
-
+let fd = {};
+let thirdPartyEmotes = {};
+let widgetLoaded = false;
 let testTimer = null;
 
-const esc = s => String(s ?? '')
-  .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-  .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-const escRx = s => s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+const MAX_MSGS = 8;
 
+// ── helpers ──────────────────────────────────────────────────
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, m =>
+    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+}
+function escRx(s) { return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+
+// ── CSS vars ─────────────────────────────────────────────────
 function applyVars() {
+  // Chargement dynamique Google Font
   let lnk = document.getElementById('_gf');
   if (!lnk) {
     lnk = document.createElement('link');
-    lnk.id = '_gf';
-    lnk.rel = 'stylesheet';
+    lnk.id = '_gf'; lnk.rel = 'stylesheet';
     document.head.appendChild(lnk);
   }
-  lnk.href = `https://fonts.googleapis.com/css2?family=${CFG.font.replace(/ /g,'+')}:ital,wght@0,400;0,700;1,400;1,700&display=swap`;
+  const font = fd.googleFont || 'Barlow Condensed';
+  lnk.href = `https://fonts.googleapis.com/css2?family=${font.replace(/ /g,'+')}:ital,wght@0,400;0,700;1,400;1,700&display=swap`;
 
   const R = document.documentElement;
-  const s = (k,v) => R.style.setProperty(k,v);
-  s('--font', `'${CFG.font}',sans-serif`);
-  s('--av-size', CFG.avSize+'px');
-  s('--av-bg', CFG.avBg);
-  s('--av-color', CFG.avInitColor);
-  s('--av-border', CFG.avBorder);
-  s('--badge-sz', CFG.badgeSz+'px');
-  s('--name-color', CFG.nameColor);
-  s('--name-size', CFG.nameSz+'px');
-  s('--msg-color', CFG.msgColor);
-  s('--msg-size', CFG.msgSz+'px');
-  s('--msg-bg', CFG.msgBg);
-  s('--border-w', CFG.borderW+'px');
-  s('--border-col', CFG.borderCol);
-  s('--gap', CFG.gap+'px');
+  const set = (k,v) => R.style.setProperty(k,v);
+  set('--font',         `'${font}', sans-serif`);
+  set('--av-size',      (fd.avatarSize   || 62)  + 'px');
+  set('--av-bg',         fd.avatarInitialsBg     || '#AA4DDA');
+  set('--av-color',      fd.avatarInitialsColor  || '#ffffff');
+  set('--av-border',     fd.avatarBorderColor    || 'rgba(255,255,255,0.85)');
+  set('--badge-sz',     (fd.badgeSize    || 20)  + 'px');
+  set('--name-color',    fd.usernameColor        || '#039BEF');
+  set('--name-size',    (fd.usernameFontSize || 22) + 'px');
+  set('--name-transform',
+    fd.usernameTransform === 'uppercase' ? 'uppercase' :
+    fd.usernameTransform === 'lowercase' ? 'lowercase' : 'none');
+  set('--msg-color',     fd.messageColor         || '#CDEDF2');
+  set('--msg-size',     (fd.messageFontSize || 20) + 'px');
+  set('--msg-bg',        fd.messageBg            || 'rgba(10,16,40,0.85)');
+  set('--border-w',     (fd.borderWidth   || 12)  + 'px');
+  set('--border-col',    fd.borderColor          || '#039BEF');
+  set('--gap',          (fd.spacing       || 12)  + 'px');
 
   const c = document.getElementById('chat-container');
-  if (c) c.style.flexDirection = CFG.rtl ? 'row-reverse' : 'row';
+  if (c) c.style.flexDirection =
+    fd.scrollDirection === 'right-to-left' ? 'row-reverse' : 'row';
 }
 
-function parseTwitchEmotes(text, emotes) {
-  if (!emotes) return esc(text);
-  const reps = [];
+// ── Emotes Twitch (tableau SE : [{id,start,end,urls}]) ───────
+function renderEmotes(text, emotes) {
+  const chars = Array.from(String(text || ''));
+  const map = new Map();
 
   if (Array.isArray(emotes)) {
-    for (const e of emotes) {
-      reps.push({ s: e.start ?? e.startIndex, e: e.end ?? e.endIndex, id: e.id, name: e.name });
-    }
-  } else if (typeof emotes === 'object') {
+    // Format moderne SE : tableau d'objets
+    emotes.forEach(em => {
+      const url = em.urls
+        ? (em.urls['2'] || em.urls['1'] || em.urls['4'] || Object.values(em.urls)[0] || '')
+        : (em.id ? `https://static-cdn.jtvnw.net/emoticons/v2/${em.id}/default/dark/3.0` : '');
+      if (!url) return;
+      const s = Number(em.start !== undefined ? em.start : em.startIndex);
+      const e = Number(em.end   !== undefined ? em.end   : em.endIndex);
+      if (isNaN(s) || isNaN(e)) return;
+      map.set(s, { end: e, html: `<img class="emote" src="${esc(url)}" alt="${esc(chars.slice(s,e+1).join(''))}" onerror="this.remove()">` });
+    });
+  } else if (emotes && typeof emotes === 'object') {
+    // Format legacy : { "id": ["start-end"] }
     for (const [id, positions] of Object.entries(emotes)) {
       const list = Array.isArray(positions) ? positions : String(positions).split('/');
       for (const p of list) {
         const [s, e] = String(p).split('-').map(Number);
-        if (!isNaN(s) && !isNaN(e)) {
-          const chars = [...text];
-          reps.push({ s, e, id, name: chars.slice(s, e+1).join('') });
-        }
+        if (isNaN(s) || isNaN(e)) continue;
+        const url = `https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/3.0`;
+        map.set(s, { end: e, html: `<img class="emote" src="${esc(url)}" alt="${esc(chars.slice(s,e+1).join(''))}" onerror="this.remove()">` });
       }
     }
   }
 
-  if (!reps.length) return esc(text);
-  reps.sort((a,b) => a.s - b.s);
+  if (!map.size) return null; // pas d'emotes → retourner null pour fallback
 
-  const chars = [...text];
-  let out = '', last = 0;
-  for (const r of reps) {
-    if (r.s > last) out += esc(chars.slice(last, r.s).join(''));
-    out += `<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${r.id}/default/dark/2.0" alt="${esc(r.name)}" title="${esc(r.name)}"/>`;
-    last = r.e + 1;
+  let out = '', i = 0;
+  while (i < chars.length) {
+    if (map.has(i)) { const en = map.get(i); out += en.html; i = en.end + 1; }
+    else out += esc(chars[i++]);
   }
-  if (last < chars.length) out += esc(chars.slice(last).join(''));
   return out;
 }
 
-function parseThirdParty(html, emoteSet) {
-  if (!Array.isArray(emoteSet)) return html;
-  for (const e of emoteSet) {
-    if (!e || !e.name) continue;
-    const url = (e.urls && (e.urls['2'] || e.urls['1'])) || e.url || '';
-    if (!url) continue;
-    const rx = new RegExp('(?<![^\\s<>])' + escRx(e.name) + '(?![^\\s<>])', 'g');
-    html = html.replace(rx, `<img class="emote" src="${url}" alt="${esc(e.name)}" title="${esc(e.name)}"/>`);
-  }
-  return html;
+// ── Emotes tierces (BTTV/FFZ/7TV) ───────────────────────────
+async function loadThirdPartyEmotes(channelId) {
+  if (!channelId) return;
+  try {
+    const r = await fetch(`https://7tv.io/v3/users/twitch/${channelId}`);
+    if (r.ok) {
+      const d = await r.json();
+      ((d?.emote_set?.emotes) || []).forEach(e => {
+        if (!e.name || !e.data?.host?.url) return;
+        const files = e.data.host.files || [];
+        const f = files.find(x => x.name === '1x.webp') || files[0];
+        if (f) thirdPartyEmotes[e.name] = 'https:' + e.data.host.url + '/' + f.name;
+      });
+    }
+  } catch(e) {}
+  try {
+    const r = await fetch(`https://api.betterttv.net/3/cached/users/twitch/${channelId}`);
+    if (r.ok) {
+      const d = await r.json();
+      [...(d.channelEmotes||[]), ...(d.sharedEmotes||[])].forEach(e => {
+        if (e.code && e.id) thirdPartyEmotes[e.code] = `https://cdn.betterttv.net/emote/${e.id}/1x`;
+      });
+    }
+  } catch(e) {}
 }
 
+function injectThirdParty(text) {
+  return String(text || '').split(/(\s+)/).map(tok => {
+    if (/^\s+$/.test(tok)) return tok;
+    return thirdPartyEmotes[tok]
+      ? `<img class="emote" src="${esc(thirdPartyEmotes[tok])}" alt="${esc(tok)}" onerror="this.remove()">`
+      : esc(tok);
+  }).join('');
+}
+
+// ── Badges ───────────────────────────────────────────────────
 function buildBadges(badges) {
-  if (!CFG.showBadges || !Array.isArray(badges) || !badges.length) return '';
-  const imgs = badges
-    .filter(b => b)
-    .map(b => {
-      const url = b.url || b.image_url || '';
-      if (!url) return '';
-      return `<img src="${url}" alt="${esc(b.type||b.id||'')}" title="${esc(b.description||b.type||'')}"/>`;
-    }).join('');
+  if (fd.showBadges === 'no') return '';
+  if (!Array.isArray(badges) || !badges.length) return '';
+  const imgs = badges.map(b => {
+    if (!b) return '';
+    const url = b.image_url_1x || b.imageUrl1x || b.url || b.image || '';
+    return url ? `<img class="badge" src="${esc(url)}" alt="" onerror="this.remove()">` : '';
+  }).join('');
   return imgs ? `<span class="chat-badges">${imgs}</span>` : '';
 }
 
-function buildAvatar(nick, imgUrl) {
-  if (!CFG.showAvatars) return '';
-  const init = esc((nick||'?')[0].toUpperCase());
+// ── Avatar ───────────────────────────────────────────────────
+function buildAvatar(name, imgUrl) {
+  if (fd.showAvatars === 'no') return '';
+  const init = esc((name || '?')[0].toUpperCase());
+  const mode = fd.avatarMode || 'twitch';
   let inner;
-  if (CFG.avatarMode === 'twitch' && imgUrl) {
-    inner = `<img src="${imgUrl}" alt="${esc(nick)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/><span class="av-init" style="display:none">${init}</span>`;
+  if (mode === 'twitch' && imgUrl) {
+    inner = `<img src="${esc(imgUrl)}" alt="${esc(name)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+          + `<span class="av-init" style="display:none">${init}</span>`;
   } else {
     inner = `<span class="av-init">${init}</span>`;
   }
   return `<div class="chat-avatar">${inner}</div>`;
 }
 
-function addMsg(ev) {
-  const name = ev.displayName || ev.display_name || ev.nick || ev.username || ev.name || 'Chat';
-  const text = ev.text || ev.message || '';
-  const color = (CFG.nameColorType === 'twitch' && (ev.color || ev.chat_color)) ? (ev.color || ev.chat_color) : CFG.nameColor;
-  const imgUrl = ev.profileImageURL || ev.profileImage || ev.avatar || '';
-  const emotes = ev.emotes || {};
-  const emoteSet = ev.emoteSet || ev.thirdPartyEmotes || [];
-  const badges = ev.badges || [];
+// ── Rendu texte (reprend exactement la logique de chat-flow) ─
+function renderText(data, isTest) {
+  const rawText = String(data.text || data.messageRaw || (data.message && data.message.text) || '');
 
-  let msgHtml = parseTwitchEmotes(text, emotes);
-  msgHtml = parseThirdParty(msgHtml, emoteSet);
+  if (isTest) {
+    // remplace Kappa LUL etc. pour les messages de test
+    const testEmotes = [['Kappa','25'],['LUL','425618'],['PogChamp','88'],['BibleThump','33'],['ResidentSleeper','245']];
+    let out = esc(rawText);
+    testEmotes.forEach(([name, id]) => {
+      out = out.replace(
+        new RegExp(`\\b${escRx(name)}\\b`, 'g'),
+        `<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/3.0" alt="${name}" onerror="this.remove()">`
+      );
+    });
+    return out;
+  }
 
-  const nameStyle = [
-    `color:${color}`,
-    CFG.nameTransform !== 'none' ? `text-transform:${CFG.nameTransform}` : '',
-    CFG.nameShadow ? `text-shadow:1px 1px 4px ${CFG.nameShadow}` : ''
-  ].filter(Boolean).join(';');
+  // 1) Essayer le format tableau d'emotes (SE moderne)
+  const fromArray = renderEmotes(rawText, data.emotes);
+  if (fromArray) return fromArray;
+
+  // 2) Essayer fragments (format message.fragments)
+  const frags = data.fragments || (data.message && data.message.fragments);
+  if (Array.isArray(frags) && frags.length) {
+    return frags.map(part => {
+      if (part.type === 'emote' && part.emote && part.emote.id) {
+        const url = `https://static-cdn.jtvnw.net/emoticons/v2/${part.emote.id}/default/dark/3.0`;
+        return `<img class="emote" src="${esc(url)}" alt="${esc(part.text||'emote')}" onerror="this.remove()">`;
+      }
+      return esc(part.text || '');
+    }).join('');
+  }
+
+  // 3) Fallback : texte brut + emotes tierces
+  return injectThirdParty(rawText);
+}
+
+// ── Ajout d'un message ───────────────────────────────────────
+function addMsg(data, isTest) {
+  const name  = data.displayName || data.nick || data.name || 'viewer';
+  const color = fd.usernameColorType === 'twitch'
+    ? (data.displayColor || data.color || fd.usernameColor || '#039BEF')
+    : (fd.usernameColor || '#039BEF');
+  const imgUrl = data.profileImageURL || data.profileImage || data.avatar || '';
 
   const card = document.createElement('div');
   card.className = 'chat-msg';
-  card.innerHTML = buildAvatar(name, imgUrl) + `<div class="chat-bubble"><div class="chat-meta">${buildBadges(badges)}<span class="chat-name" style="${nameStyle}">${esc(name)}</span></div><div class="chat-text">${msgHtml}</div></div>`;
+  card.innerHTML =
+    buildAvatar(name, imgUrl) +
+    `<div class="chat-bubble">
+      <div class="chat-meta">
+        ${buildBadges(data.badges || [])}
+        <span class="chat-name" style="color:${esc(color)}">${esc(name)}</span>
+      </div>
+      <div class="chat-text">${renderText(data, isTest)}</div>
+    </div>`;
 
   const c = document.getElementById('chat-container');
-  CFG.rtl ? c.insertBefore(card, c.firstChild) : c.appendChild(card);
+  fd.scrollDirection === 'right-to-left'
+    ? c.insertBefore(card, c.firstChild)
+    : c.appendChild(card);
 
+  // Supprimer les anciens messages si trop
   const all = [...c.querySelectorAll('.chat-msg:not(.removing)')];
-  if (all.length > CFG.maxMsgs) all.slice(0, all.length - CFG.maxMsgs).forEach(removeMsg);
-  if (CFG.hideAfter > 0) setTimeout(() => removeMsg(card), CFG.hideAfter * 1000);
+  if (all.length > MAX_MSGS) {
+    all.slice(0, all.length - MAX_MSGS).forEach(el => removeMsg(el));
+  }
+
+  if ((fd.hideAfter || 0) > 0) {
+    setTimeout(() => removeMsg(card), fd.hideAfter * 1000);
+  }
 }
 
 function removeMsg(el) {
@@ -177,94 +247,61 @@ function removeMsg(el) {
   setTimeout(() => el.parentNode?.removeChild(el), 350);
 }
 
-function clearTestTimer() {
-  if (testTimer) {
-    clearInterval(testTimer);
-    testTimer = null;
-  }
-}
-
+// ── Messages de test ─────────────────────────────────────────
 function startTestMessages() {
-  clearTestTimer();
+  stopTestMessages();
   const samples = [
-    {
-      displayName: 'StreamerVault',
-      text: 'this is a message with emotes Kappa PogChamp',
-      color: '#39d353',
-      badges: []
-    },
-    {
-      displayName: 'Sawookie',
-      text: 'Just subscribed! This game looks amazing!',
-      color: '#8B5CF6',
-      badges: []
-    },
-    {
-      displayName: 'NeonNinja',
-      text: 'Welcome to the stream! Make sure to follow for more content!',
-      color: '#ff4fd8',
-      badges: []
-    }
+    { displayName:'StreamerVault', text:'this is a message with emotes Kappa LUL',  displayColor:'#39d353', badges:[] },
+    { displayName:'Sawookie',      text:'Just subscribed! This game looks amazing!',  displayColor:'#8B5CF6', badges:[] },
+    { displayName:'NeonNinja',     text:'Welcome to the stream! Make sure to follow for more content!', displayColor:'#ff4fd8', badges:[] },
+    { displayName:'RocketRacer',   text:'So close! BibleThump PogChamp',              displayColor:'#1E90FF', badges:[] },
+    { displayName:'PixelPirate',   text:'LUL ce stream est incroyable ResidentSleeper', displayColor:'#FF6B35', badges:[] },
   ];
-
   let i = 0;
-  for (let j = 0; j < samples.length; j++) addMsg(samples[j]);
-
+  samples.forEach((s, idx) => setTimeout(() => addMsg(s, true), idx * 400));
   testTimer = setInterval(() => {
-    addMsg(samples[i % samples.length]);
+    addMsg(samples[i % samples.length], true);
     i++;
-  }, 2200);
+  }, 2500);
 }
 
+function stopTestMessages() {
+  if (testTimer) { clearInterval(testTimer); testTimer = null; }
+}
+
+// ── StreamElements Events ────────────────────────────────────
 window.addEventListener('onWidgetLoad', obj => {
-  const fd = obj?.detail?.fieldData;
-  if (!fd) { applyVars(); return; }
-
-  const b = v => v === 'yes' || v === true || v === 1;
-  const n = (v, def) => { const x = parseInt(v); return isNaN(x) ? def : x; };
-
-  CFG.hideAfter = n(fd.hideAfter, 0);
-  CFG.hideCmds = b(fd.hideCommands);
-  CFG.showAvatars = b(fd.showAvatars);
-  CFG.fitContent = b(fd.fitContentWidth);
-  CFG.avatarMode = fd.avatarMode || 'twitch';
-  CFG.avSize = n(fd.avatarSize, 62);
-  CFG.avBg = fd.avatarInitialsBg || '#AA4DDA';
-  CFG.avInitColor = fd.avatarInitialsColor || '#ffffff';
-  CFG.avBorder = fd.avatarBorderColor || 'rgba(255,255,255,0.9)';
-  CFG.showBadges = b(fd.showBadges);
-  CFG.badgeSz = n(fd.badgeSize, 20);
-  CFG.nameTransform = fd.usernameTransform === 'uppercase' ? 'uppercase' : fd.usernameTransform === 'lowercase' ? 'lowercase' : 'none';
-  CFG.nameColorType = fd.usernameColorType || 'custom';
-  CFG.nameColor = fd.usernameColor || '#039BEF';
-  CFG.nameShadow = (fd.usernameShadowColor && fd.usernameShadowColor !== 'rgba(255, 255, 255, 0)') ? fd.usernameShadowColor : '';
-  CFG.msgColor = fd.messageColor || '#CDEDF2';
-  CFG.msgBg = fd.messageBg || 'rgba(15,20,45,0.82)';
-  CFG.nameSz = n(fd.usernameFontSize, 22);
-  CFG.msgSz = n(fd.messageFontSize, 20);
-  CFG.borderW = n(fd.borderWidth, 12);
-  CFG.borderCol = fd.borderColor || '#039BEF';
-  CFG.rtl = fd.scrollDirection === 'right-to-left';
-  CFG.font = fd.googleFont || 'Barlow Condensed';
-  CFG.gap = n(fd.spacing, 12);
-  CFG.enableTestMessages = b(fd.enableTestMessages);
-
+  widgetLoaded = true;
+  fd = obj?.detail?.fieldData || {};
   applyVars();
 
-  if (CFG.enableTestMessages) startTestMessages();
-  else clearTestTimer();
+  // Charger emotes tierces
+  const ch = obj?.detail?.channel;
+  if (ch?.providerId) loadThirdPartyEmotes(ch.providerId);
+
+  if (fd.enableTestMessages === 'yes') startTestMessages();
+});
+
+// fallback si SE ne déclenche pas onWidgetLoad (preview navigateur)
+window.addEventListener('load', () => {
+  setTimeout(() => { if (!widgetLoaded) { applyVars(); } }, 400);
 });
 
 window.addEventListener('onEventReceived', obj => {
   const listener = obj?.detail?.listener;
-  const ev = obj?.detail?.event;
-  if (!ev) return;
+  /*
+   * ⚠️ Structure réelle SE :
+   * obj.detail.event peut contenir { data: {...} } ou être directement les données
+   */
+  const event = obj?.detail?.event || {};
+  const data  = event.data || event; // ← CRUCIAL : chat-flow fait exactement ça
+
   if (listener !== 'message') return;
 
-  const text = ev.text || ev.message || '';
-  if (CFG.hideCmds && text.startsWith('!')) return;
+  const text = String(data.text || '');
+  if (fd.hideCommands === 'yes' && text.startsWith('!')) return;
 
-  addMsg(ev);
+  addMsg(data, false);
 });
 
 document.addEventListener('DOMContentLoaded', applyVars);
