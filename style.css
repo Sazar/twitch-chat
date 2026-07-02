@@ -1,5 +1,4 @@
-/* === Google Font === */
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,700;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,700;1,400;1,700&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -7,151 +6,157 @@ html, body {
   background: transparent;
   width: 100%; height: 100%;
   overflow: hidden;
+  font-family: 'Barlow Condensed', sans-serif;
 }
 
-/* ── Outer wrapper: aligns cards to bottom ── */
-#chat-wrap {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: flex-end;
-  padding: 0 6px 6px 6px;
-}
-
-/* ── Scrolling row ── */
+/* ── Conteneur principal ── */
 #chat-container {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
   display: flex;
   flex-direction: row;
   align-items: flex-end;
-  gap: var(--spacing, 15px);
+  gap: 12px;
+  padding: 0 8px 8px;
   overflow: hidden;
-  width: 100%;
   flex-wrap: nowrap;
 }
 
-/* ══════════════════════════════════
-   MESSAGE CARD
-══════════════════════════════════ */
+/* ── Carte message ── */
 .chat-msg {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 6px;
+  gap: 0;
   flex-shrink: 0;
-  animation: msgIn .3s cubic-bezier(.22,1,.36,1) both;
+  animation: slideIn .35s cubic-bezier(.22,1,.36,1) both;
 }
 
-/* ── Avatar circle ── */
-.msg-avatar {
+/* ── Avatar cercle ── */
+.chat-avatar {
   flex-shrink: 0;
-  width:  var(--avatar-size, 60px);
-  height: var(--avatar-size, 60px);
+  width: 62px;
+  height: 62px;
   border-radius: 50%;
-  border: 2px solid var(--avatar-border, #ffffff);
+  border: 2px solid rgba(255,255,255,0.9);
   overflow: hidden;
-  background: var(--avatar-bg, #AA4DDA);
+  background: #AA4DDA;
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-right: -6px;
+  z-index: 2;
+  position: relative;
 }
-
-.msg-avatar img {
+.chat-avatar img {
   width: 100%; height: 100%;
-  object-fit: cover;
-  display: block;
+  object-fit: cover; display: block;
 }
-
-.msg-avatar .initials {
-  font-family: var(--font, 'Barlow Condensed', sans-serif);
-  font-size: calc(var(--avatar-size, 60px) * 0.42);
+.chat-avatar .av-init {
+  font-size: 26px;
   font-weight: 700;
-  color: var(--avatar-initials-color, #fff);
+  color: #fff;
   text-transform: uppercase;
   line-height: 1;
-  pointer-events: none;
-  user-select: none;
+  font-style: normal;
 }
 
-/* ── Bubble ── */
-.msg-bubble {
+/* ── Bulle ── */
+.chat-bubble {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  background: var(--msg-bg, rgba(0,0,0,0.55));
-  border-left: var(--border-w, 13px) solid var(--border-col, #039BEF);
+  gap: 0px;
+  background: rgba(15, 20, 45, 0.82);
+  border-left: 12px solid #039BEF;
   border-radius: 0 6px 6px 0;
-  padding: 5px 12px 6px 8px;
-  min-width: 80px;
-  max-width: var(--msg-max-w, 280px);
+  padding: 5px 14px 6px 12px;
+  min-width: 90px;
+  max-width: 300px;
+  position: relative;
+  z-index: 1;
 }
 
-/* fit content: remove max-width */
-.chat-msg.fit .msg-bubble { max-width: none; }
-
-/* ── Username row ── */
-.msg-meta {
+/* ── Ligne username ── */
+.chat-meta {
   display: flex;
   align-items: center;
   gap: 4px;
-  overflow: hidden;
+  margin-bottom: 1px;
 }
+.chat-badges { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.chat-badges img { width: 20px; height: 20px; vertical-align: middle; }
 
-.msg-badges {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex-shrink: 0;
-}
-
-.msg-badges img {
-  width:  var(--badge-size, 25px);
-  height: var(--badge-size, 25px);
-  vertical-align: middle;
-}
-
-.msg-name {
-  font-family: var(--font, 'Barlow Condensed', sans-serif);
-  font-size:   var(--name-size, 25px);
+.chat-name {
+  font-size: 22px;
   font-weight: 700;
-  font-style:  italic;
-  color: var(--name-color, #039BEF);
-  text-transform: var(--name-transform, none);
-  text-shadow:    var(--name-shadow, none);
+  font-style: italic;
+  color: #039BEF;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.15;
+  line-height: 1.1;
+  letter-spacing: 0.3px;
 }
 
-/* ── Message text ── */
-.msg-text {
-  font-family: var(--font, 'Barlow Condensed', sans-serif);
-  font-size:   var(--msg-size, 25px);
+/* ── Texte du message ── */
+.chat-text {
+  font-size: 20px;
   font-weight: 400;
-  color: var(--msg-color, #CDEDF2);
+  font-style: normal;
+  color: #CDEDF2;
   line-height: 1.25;
   word-break: break-word;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 2px;
-  white-space: pre-wrap;
+  gap: 3px;
 }
-
-.msg-text img.emote {
-  height: calc(var(--msg-size, 25px) * 1.3);
+.chat-text img.emote {
+  height: 28px;
   width: auto;
   vertical-align: middle;
   display: inline-block;
 }
 
-/* ══ Animations ══ */
-@keyframes msgIn {
-  from { opacity: 0; transform: translateX(-24px); }
-  to   { opacity: 1; transform: translateX(0); }
+/* ── Animations ── */
+@keyframes slideIn {
+  from { opacity:0; transform: translateX(-20px); }
+  to   { opacity:1; transform: translateX(0); }
 }
-@keyframes msgOut {
-  from { opacity: 1; transform: translateX(0) scale(1); }
-  to   { opacity: 0; transform: translateX(20px) scale(.95); }
+@keyframes slideOut {
+  from { opacity:1; transform: translateX(0) scale(1); }
+  to   { opacity:0; transform: translateX(16px) scale(.96); }
 }
-.chat-msg.out { animation: msgOut .3s ease-in forwards; }
+.chat-msg.removing { animation: slideOut .3s ease-in forwards; }
+
+/* ── Variables CSS (écrasées par JS) ── */
+:root {
+  --av-size: 62px;
+  --av-bg: #AA4DDA;
+  --av-border: rgba(255,255,255,0.9);
+  --av-color: #fff;
+  --badge-sz: 20px;
+  --name-color: #039BEF;
+  --name-size: 22px;
+  --msg-color: #CDEDF2;
+  --msg-size: 20px;
+  --msg-bg: rgba(15,20,45,0.82);
+  --border-w: 12px;
+  --border-col: #039BEF;
+  --gap: 12px;
+  --font: 'Barlow Condensed', sans-serif;
+}
+
+/* Application des variables */
+#chat-container { gap: var(--gap); }
+.chat-avatar {
+  width: var(--av-size); height: var(--av-size);
+  background: var(--av-bg);
+  border-color: var(--av-border);
+}
+.chat-avatar .av-init { color: var(--av-color); font-size: calc(var(--av-size) * 0.4); }
+.chat-badges img { width: var(--badge-sz); height: var(--badge-sz); }
+.chat-name { color: var(--name-color); font-size: var(--name-size); font-family: var(--font); }
+.chat-text { color: var(--msg-color); font-size: var(--msg-size); font-family: var(--font); }
+.chat-text img.emote { height: calc(var(--msg-size) * 1.4); }
+.chat-bubble { background: var(--msg-bg); border-left-width: var(--border-w); border-left-color: var(--border-col); }
