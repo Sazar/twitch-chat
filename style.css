@@ -4,7 +4,7 @@
 html, body { background: transparent; width: 100%; height: 100%; overflow: hidden; }
 
 /* ================================================================
-   CONTENEUR — barre horizontale fixée en bas
+   CONTENEUR
 ================================================================ */
 #chat-container {
   position: fixed;
@@ -19,17 +19,22 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
 }
 
 /* ================================================================
-   CARTE — [AVATAR] [BARRE] [BULLE]
-   align-items: flex-end → tout collé en bas
+   CARTE
+   Structure visuelle :
+
+   [AVATAR]   Pseudo  🏅🏅
+   [BARRE] ┌─────────────────┐
+           │ texte du message│
+           └─────────────────┘
 ================================================================ */
 .chat-msg {
   display: flex;
   flex-direction: row;
-  align-items: flex-end;   /* avatar + barre + bulle alignés par le bas */
+  align-items: flex-end;   /* tout aligné par le bas */
   flex-shrink: 0;
   gap: 0;
   animation: msgIn .30s cubic-bezier(.22,1,.36,1) both;
-  filter: drop-shadow(0 3px 10px rgba(0,0,0,.40));
+  filter: drop-shadow(0 3px 12px rgba(0,0,0,.45));
 }
 .chat-msg.removing {
   animation: msgOut .28s ease-in forwards;
@@ -37,21 +42,24 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
 }
 
 /* ================================================================
-   AVATAR — carré bords arrondis, initiale italique bold
-   Collé à gauche, aligné par le bas avec la bulle
+   AVATAR — carré bords arrondis
+   Border colorée = couleur du pseudo (injectée en JS via style)
 ================================================================ */
 .chat-avatar {
   flex-shrink: 0;
-  width:  var(--av-size, 58px);
-  height: var(--av-size, 58px);
+  width:  var(--av-size, 56px);
+  height: var(--av-size, 56px);
   border-radius: var(--av-radius, 10px);
   overflow: hidden;
   background: var(--av-bg, #7C3AED);
   display: flex;
   align-items: center;
   justify-content: center;
-  /* petit gap visuel entre avatar et barre */
+  /* border colorée injectée inline par JS */
+  border: 2.5px solid transparent;
   margin-right: 4px;
+  /* L'avatar descend un peu pour que son bas soit à hauteur du bas de la bulle */
+  align-self: flex-end;
 }
 .chat-avatar img {
   width: 100%; height: 100%;
@@ -59,7 +67,7 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
 }
 .chat-avatar .av-init {
   font-family: var(--font, 'Barlow Condensed', sans-serif);
-  font-size: calc(var(--av-size, 58px) * 0.48);
+  font-size: calc(var(--av-size, 56px) * 0.48);
   font-weight: 800;
   font-style: italic;
   color: var(--av-color, #fff);
@@ -69,44 +77,47 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
 }
 
 /* ================================================================
-   BARRE VERTICALE — entre avatar et bulle
-   Hauteur = hauteur de la bulle (align-self: stretch)
+   BARRE VERTICALE
 ================================================================ */
 .chat-bar {
   flex-shrink: 0;
   width: var(--bar-w, 5px);
   border-radius: 3px;
   background: var(--bar-col, #539ef7);
-  align-self: stretch;    /* prend toute la hauteur de la bulle */
-  margin-right: 0;
+  /* La barre commence AU NIVEAU du haut de la bulle (pas du pseudo) */
+  align-self: stretch;
+  /* On la décale vers le bas pour qu'elle commence après le pseudo */
+  margin-top: var(--name-size, 20px);
+  margin-top: calc(var(--name-size, 20px) * 1.25 + 2px);
 }
 
 /* ================================================================
-   BULLE — fond sombre semi-transparent
-   Contient : topline (pseudo+badges) PUIS texte
-   Le pseudo est DANS la bulle, pas au-dessus
+   WRAPPER DROIT — pseudo à cheval + bulle
 ================================================================ */
-.chat-bubble {
+.chat-body {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 2px;
-  background: var(--msg-bg, rgba(15, 18, 45, 0.82));
-  border-radius: 0 10px 10px 0;   /* coins droits arrondis, gauche plat (la barre fait la jonction) */
-  padding: 7px 12px 7px 10px;
-  min-width: 80px;
-  max-width: var(--msg-max-w, 320px);
+  align-items: flex-start;
+  position: relative;
 }
 
 /* ================================================================
-   TOPLINE — pseudo (gauche) + badges (droite), même ligne
+   TOPLINE — à cheval : dépasse AU-DESSUS de la bulle
+   Positionné en absolu par rapport à .chat-body
+   => translateY(-50%) pour moitié dehors, moitié dans la bulle
 ================================================================ */
 .chat-topline {
   display: flex;
   flex-direction: row;
   align-items: center;
   gap: 5px;
-  min-width: 0;
+  padding: 0 8px 0 10px;
+  /* À cheval : la ligne du bas du pseudo = le haut de la bulle */
+  position: relative;
+  z-index: 2;
+  /* Décalage négatif vers le bas pour qu'il chevauche la bulle */
+  margin-bottom: -8px;
+  padding-bottom: 0;
 }
 
 .chat-name {
@@ -118,7 +129,6 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
   text-transform: var(--name-transform, none);
   white-space: nowrap;
   line-height: 1.1;
-  letter-spacing: 0.2px;
   overflow: hidden;
   text-overflow: ellipsis;
   flex-shrink: 1;
@@ -139,13 +149,27 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
 }
 
 /* ================================================================
+   BULLE — fond sombre, pseudo chevauche son bord supérieur
+================================================================ */
+.chat-bubble {
+  display: flex;
+  flex-direction: column;
+  background: var(--msg-bg, rgba(15, 18, 45, 0.82));
+  border-radius: 0 10px 10px 0;
+  padding: 12px 12px 8px 10px;  /* padding-top plus grand pour laisser place au pseudo */
+  min-width: 80px;
+  max-width: var(--msg-max-w, 320px);
+  position: relative;
+  z-index: 1;
+}
+
+/* ================================================================
    TEXTE MESSAGE
 ================================================================ */
 .chat-text {
   font-family: var(--font, 'Barlow Condensed', sans-serif);
   font-size:   var(--msg-size, 18px);
   font-weight: 400;
-  font-style:  normal;
   color:       var(--msg-color, #dde9f7);
   line-height: 1.35;
   word-break:  break-word;
@@ -176,7 +200,7 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
 ================================================================ */
 :root {
   --font:           'Barlow Condensed', sans-serif;
-  --av-size:        58px;
+  --av-size:        56px;
   --av-radius:      10px;
   --av-bg:          #7C3AED;
   --av-color:       #fff;
