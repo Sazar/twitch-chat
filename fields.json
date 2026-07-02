@@ -169,5 +169,14 @@
     "min": 0,
     "max": 60,
     "step": 1
+  },
+  "enableTestMessages": {
+    "type": "dropdown",
+    "label": "Enable Test Messages",
+    "value": "no",
+    "options": {
+      "yes": "Yes",
+      "no": "No"
+    }
   }
 }
