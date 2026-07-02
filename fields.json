@@ -8,37 +8,33 @@
     "type": "dropdown",
     "label": "Hide Commands (!command)",
     "value": "yes",
-    "options": {
-      "yes": "Yes",
-      "no": "No"
-    }
+    "options": { "yes": "Yes", "no": "No" }
+  },
+  "maxMessages": {
+    "type": "slider",
+    "label": "Max Messages Visible",
+    "value": 6,
+    "min": 1,
+    "max": 20,
+    "step": 1
   },
   "showAvatars": {
     "type": "dropdown",
     "label": "Show Avatars",
     "value": "yes",
-    "options": {
-      "yes": "Yes",
-      "no": "No"
-    }
+    "options": { "yes": "Yes", "no": "No" }
   },
   "fitContentWidth": {
     "type": "dropdown",
     "label": "Fit Content Width",
     "value": "yes",
-    "options": {
-      "yes": "Yes",
-      "no": "No"
-    }
+    "options": { "yes": "Yes", "no": "No" }
   },
   "avatarMode": {
     "type": "dropdown",
     "label": "Avatar Mode",
     "value": "twitch",
-    "options": {
-      "twitch": "Twitch",
-      "initials": "Initials"
-    }
+    "options": { "twitch": "Twitch", "initials": "Initials" }
   },
   "avatarSize": {
     "type": "slider",
@@ -67,15 +63,12 @@
     "type": "dropdown",
     "label": "Show Badges",
     "value": "yes",
-    "options": {
-      "yes": "Yes",
-      "no": "No"
-    }
+    "options": { "yes": "Yes", "no": "No" }
   },
   "badgeSize": {
     "type": "slider",
     "label": "Badge Size",
-    "value": 25,
+    "value": 20,
     "min": 10,
     "max": 50,
     "step": 1
@@ -84,20 +77,13 @@
     "type": "dropdown",
     "label": "Username Text Transform",
     "value": "default",
-    "options": {
-      "default": "Default",
-      "uppercase": "Uppercase",
-      "lowercase": "Lowercase"
-    }
+    "options": { "default": "Default", "uppercase": "Uppercase", "lowercase": "Lowercase" }
   },
   "usernameColorType": {
     "type": "dropdown",
     "label": "Username Color Type",
     "value": "custom",
-    "options": {
-      "custom": "Custom Color",
-      "twitch": "Twitch Color"
-    }
+    "options": { "custom": "Custom Color", "twitch": "Twitch Color" }
   },
   "usernameColor": {
     "type": "colorpicker",
@@ -117,12 +103,12 @@
   "messageBg": {
     "type": "text",
     "label": "Message Background Color",
-    "value": "rgba(0,0,0,0.5)"
+    "value": "rgba(10,16,40,0.85)"
   },
   "usernameFontSize": {
     "type": "slider",
     "label": "Username Font Size",
-    "value": 25,
+    "value": 22,
     "min": 10,
     "max": 60,
     "step": 1
@@ -130,7 +116,7 @@
   "messageFontSize": {
     "type": "slider",
     "label": "Message Font Size",
-    "value": 25,
+    "value": 20,
     "min": 10,
     "max": 60,
     "step": 1
@@ -138,7 +124,7 @@
   "borderWidth": {
     "type": "slider",
     "label": "Message Left Border Width",
-    "value": 13,
+    "value": 12,
     "min": 0,
     "max": 30,
     "step": 1
@@ -152,10 +138,7 @@
     "type": "dropdown",
     "label": "Scrolling Direction",
     "value": "left-to-right",
-    "options": {
-      "left-to-right": "Left to Right",
-      "right-to-left": "Right to Left"
-    }
+    "options": { "left-to-right": "Left to Right", "right-to-left": "Right to Left" }
   },
   "googleFont": {
     "type": "text",
@@ -164,8 +147,8 @@
   },
   "spacing": {
     "type": "slider",
-    "label": "Spacing",
-    "value": 15,
+    "label": "Spacing between messages",
+    "value": 12,
     "min": 0,
     "max": 60,
     "step": 1
@@ -174,9 +157,6 @@
     "type": "dropdown",
     "label": "Enable Test Messages",
     "value": "no",
-    "options": {
-      "yes": "Yes",
-      "no": "No"
-    }
+    "options": { "yes": "Yes", "no": "No" }
   }
 }

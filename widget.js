@@ -1,18 +1,13 @@
 /*
  ================================================================
   Horizontal Twitch Chat — StreamElements Widget
-  Basé sur la structure réelle SE (copiée depuis chat-flow):
-
-  onEventReceived:
-    obj.detail.listener = 'message'
-    obj.detail.event    = { data: { ... } }  ← ou directement event
-
-  Champs du message (dans data = event.data || event) :
-    data.displayName || data.nick || data.name  → pseudo affiché
-    data.displayColor || data.color             → couleur twitch
-    data.text                                   → texte brut
-    data.emotes   → [{id, start, end, urls:{1,2,4}}]  (tableau)
-    data.badges   → [{image_url_1x, imageUrl1x, url, image}]
+  Structure SE réelle (basée sur chat-flow qui fonctionne) :
+    onEventReceived → listener = 'message'
+    data = event.data || event
+    data.displayName || data.nick || data.name
+    data.displayColor || data.color
+    data.emotes → [{id, start, end, urls}] ou {id:["s-e"]}
+    data.badges → [{image_url_1x, imageUrl1x, url, image}]
  ================================================================
 */
 
@@ -21,18 +16,20 @@ let thirdPartyEmotes = {};
 let widgetLoaded = false;
 let testTimer = null;
 
-const MAX_MSGS = 8;
+// Valeur par défaut — écrasée par fd.maxMessages au chargement
+let MAX_MSGS = 6;
 
-// ── helpers ──────────────────────────────────────────────────
+// ── helpers ───────────────────────────────────────────────────
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, m =>
     ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
 }
 function escRx(s) { return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
 
-// ── CSS vars ─────────────────────────────────────────────────
+// ── CSS vars ──────────────────────────────────────────────────
 function applyVars() {
-  // Chargement dynamique Google Font
+  MAX_MSGS = Math.max(1, parseInt(fd.maxMessages) || 6);
+
   let lnk = document.getElementById('_gf');
   if (!lnk) {
     lnk = document.createElement('link');
@@ -43,37 +40,36 @@ function applyVars() {
   lnk.href = `https://fonts.googleapis.com/css2?family=${font.replace(/ /g,'+')}:ital,wght@0,400;0,700;1,400;1,700&display=swap`;
 
   const R = document.documentElement;
-  const set = (k,v) => R.style.setProperty(k,v);
-  set('--font',         `'${font}', sans-serif`);
-  set('--av-size',      (fd.avatarSize   || 62)  + 'px');
-  set('--av-bg',         fd.avatarInitialsBg     || '#AA4DDA');
-  set('--av-color',      fd.avatarInitialsColor  || '#ffffff');
-  set('--av-border',     fd.avatarBorderColor    || 'rgba(255,255,255,0.85)');
-  set('--badge-sz',     (fd.badgeSize    || 20)  + 'px');
-  set('--name-color',    fd.usernameColor        || '#039BEF');
-  set('--name-size',    (fd.usernameFontSize || 22) + 'px');
+  const set = (k, v) => R.style.setProperty(k, v);
+  set('--font',          `'${font}', sans-serif`);
+  set('--av-size',       (parseInt(fd.avatarSize)       || 62)  + 'px');
+  set('--av-bg',          fd.avatarInitialsBg           || '#AA4DDA');
+  set('--av-color',       fd.avatarInitialsColor        || '#ffffff');
+  set('--av-border',      fd.avatarBorderColor          || 'rgba(255,255,255,0.85)');
+  set('--badge-sz',      (parseInt(fd.badgeSize)        || 20)  + 'px');
+  set('--name-color',     fd.usernameColor              || '#039BEF');
+  set('--name-size',     (parseInt(fd.usernameFontSize) || 22)  + 'px');
   set('--name-transform',
     fd.usernameTransform === 'uppercase' ? 'uppercase' :
     fd.usernameTransform === 'lowercase' ? 'lowercase' : 'none');
-  set('--msg-color',     fd.messageColor         || '#CDEDF2');
-  set('--msg-size',     (fd.messageFontSize || 20) + 'px');
-  set('--msg-bg',        fd.messageBg            || 'rgba(10,16,40,0.85)');
-  set('--border-w',     (fd.borderWidth   || 12)  + 'px');
-  set('--border-col',    fd.borderColor          || '#039BEF');
-  set('--gap',          (fd.spacing       || 12)  + 'px');
+  set('--msg-color',      fd.messageColor               || '#CDEDF2');
+  set('--msg-size',      (parseInt(fd.messageFontSize)  || 20)  + 'px');
+  set('--msg-bg',         fd.messageBg                  || 'rgba(10,16,40,0.85)');
+  set('--border-w',      (parseInt(fd.borderWidth)      || 12)  + 'px');
+  set('--border-col',     fd.borderColor                || '#039BEF');
+  set('--gap',           (parseInt(fd.spacing)          || 12)  + 'px');
 
   const c = document.getElementById('chat-container');
   if (c) c.style.flexDirection =
     fd.scrollDirection === 'right-to-left' ? 'row-reverse' : 'row';
 }
 
-// ── Emotes Twitch (tableau SE : [{id,start,end,urls}]) ───────
+// ── Emotes Twitch ─────────────────────────────────────────────
 function renderEmotes(text, emotes) {
   const chars = Array.from(String(text || ''));
   const map = new Map();
 
   if (Array.isArray(emotes)) {
-    // Format moderne SE : tableau d'objets
     emotes.forEach(em => {
       const url = em.urls
         ? (em.urls['2'] || em.urls['1'] || em.urls['4'] || Object.values(em.urls)[0] || '')
@@ -82,23 +78,27 @@ function renderEmotes(text, emotes) {
       const s = Number(em.start !== undefined ? em.start : em.startIndex);
       const e = Number(em.end   !== undefined ? em.end   : em.endIndex);
       if (isNaN(s) || isNaN(e)) return;
-      map.set(s, { end: e, html: `<img class="emote" src="${esc(url)}" alt="${esc(chars.slice(s,e+1).join(''))}" onerror="this.remove()">` });
+      map.set(s, {
+        end: e,
+        html: `<img class="emote" src="${esc(url)}" alt="${esc(chars.slice(s,e+1).join(''))}" onerror="this.remove()">`
+      });
     });
   } else if (emotes && typeof emotes === 'object') {
-    // Format legacy : { "id": ["start-end"] }
     for (const [id, positions] of Object.entries(emotes)) {
       const list = Array.isArray(positions) ? positions : String(positions).split('/');
       for (const p of list) {
         const [s, e] = String(p).split('-').map(Number);
         if (isNaN(s) || isNaN(e)) continue;
         const url = `https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/3.0`;
-        map.set(s, { end: e, html: `<img class="emote" src="${esc(url)}" alt="${esc(chars.slice(s,e+1).join(''))}" onerror="this.remove()">` });
+        map.set(s, {
+          end: e,
+          html: `<img class="emote" src="${esc(url)}" alt="${esc(chars.slice(s,e+1).join(''))}" onerror="this.remove()">`
+        });
       }
     }
   }
 
-  if (!map.size) return null; // pas d'emotes → retourner null pour fallback
-
+  if (!map.size) return null;
   let out = '', i = 0;
   while (i < chars.length) {
     if (map.has(i)) { const en = map.get(i); out += en.html; i = en.end + 1; }
@@ -107,7 +107,7 @@ function renderEmotes(text, emotes) {
   return out;
 }
 
-// ── Emotes tierces (BTTV/FFZ/7TV) ───────────────────────────
+// ── Emotes tierces (BTTV/7TV) ─────────────────────────────────
 async function loadThirdPartyEmotes(channelId) {
   if (!channelId) return;
   try {
@@ -142,7 +142,7 @@ function injectThirdParty(text) {
   }).join('');
 }
 
-// ── Badges ───────────────────────────────────────────────────
+// ── Badges ────────────────────────────────────────────────────
 function buildBadges(badges) {
   if (fd.showBadges === 'no') return '';
   if (!Array.isArray(badges) || !badges.length) return '';
@@ -154,7 +154,7 @@ function buildBadges(badges) {
   return imgs ? `<span class="chat-badges">${imgs}</span>` : '';
 }
 
-// ── Avatar ───────────────────────────────────────────────────
+// ── Avatar ────────────────────────────────────────────────────
 function buildAvatar(name, imgUrl) {
   if (fd.showAvatars === 'no') return '';
   const init = esc((name || '?')[0].toUpperCase());
@@ -169,12 +169,11 @@ function buildAvatar(name, imgUrl) {
   return `<div class="chat-avatar">${inner}</div>`;
 }
 
-// ── Rendu texte (reprend exactement la logique de chat-flow) ─
+// ── Rendu texte ───────────────────────────────────────────────
 function renderText(data, isTest) {
   const rawText = String(data.text || data.messageRaw || (data.message && data.message.text) || '');
 
   if (isTest) {
-    // remplace Kappa LUL etc. pour les messages de test
     const testEmotes = [['Kappa','25'],['LUL','425618'],['PogChamp','88'],['BibleThump','33'],['ResidentSleeper','245']];
     let out = esc(rawText);
     testEmotes.forEach(([name, id]) => {
@@ -186,11 +185,11 @@ function renderText(data, isTest) {
     return out;
   }
 
-  // 1) Essayer le format tableau d'emotes (SE moderne)
+  // 1) Emotes tableau (SE moderne)
   const fromArray = renderEmotes(rawText, data.emotes);
   if (fromArray) return fromArray;
 
-  // 2) Essayer fragments (format message.fragments)
+  // 2) Fragments
   const frags = data.fragments || (data.message && data.message.fragments);
   if (Array.isArray(frags) && frags.length) {
     return frags.map(part => {
@@ -202,11 +201,11 @@ function renderText(data, isTest) {
     }).join('');
   }
 
-  // 3) Fallback : texte brut + emotes tierces
+  // 3) Fallback texte + emotes tierces
   return injectThirdParty(rawText);
 }
 
-// ── Ajout d'un message ───────────────────────────────────────
+// ── Ajout d'un message ────────────────────────────────────────
 function addMsg(data, isTest) {
   const name  = data.displayName || data.nick || data.name || 'viewer';
   const color = fd.usernameColorType === 'twitch'
@@ -231,13 +230,13 @@ function addMsg(data, isTest) {
     ? c.insertBefore(card, c.firstChild)
     : c.appendChild(card);
 
-  // Supprimer les anciens messages si trop
+  // Supprime les messages en trop
   const all = [...c.querySelectorAll('.chat-msg:not(.removing)')];
   if (all.length > MAX_MSGS) {
     all.slice(0, all.length - MAX_MSGS).forEach(el => removeMsg(el));
   }
 
-  if ((fd.hideAfter || 0) > 0) {
+  if ((parseInt(fd.hideAfter) || 0) > 0) {
     setTimeout(() => removeMsg(card), fd.hideAfter * 1000);
   }
 }
@@ -247,54 +246,56 @@ function removeMsg(el) {
   setTimeout(() => el.parentNode?.removeChild(el), 350);
 }
 
-// ── Messages de test ─────────────────────────────────────────
+// ── Messages de test ──────────────────────────────────────────
+// Affiche exactement MAX_MSGS messages en une seule passe, sans boucle infinie
+const TEST_POOL = [
+  { displayName:'StreamerVault', text:'this is a message with emotes Kappa LUL',           displayColor:'#39d353' },
+  { displayName:'Sawookie',      text:'Just subscribed! This game looks amazing!',           displayColor:'#8B5CF6' },
+  { displayName:'NeonNinja',     text:'Welcome to the stream! Make sure to follow for more!',displayColor:'#ff4fd8' },
+  { displayName:'RocketRacer',   text:'So close! BibleThump PogChamp',                      displayColor:'#1E90FF' },
+  { displayName:'PixelPirate',   text:'LUL ce stream est incroyable ResidentSleeper',        displayColor:'#FF6B35' },
+  { displayName:'DarkWizard',    text:'GG WP ! Tu gères vraiment bien Kappa',               displayColor:'#9333EA' },
+  { displayName:'StarGazer',     text:'Premier message ici, super stream !',                 displayColor:'#06B6D4' },
+  { displayName:'NightBlaze',    text:'PogChamp PogChamp PogChamp on y est !!',              displayColor:'#F59E0B' },
+];
+
 function startTestMessages() {
   stopTestMessages();
-  const samples = [
-    { displayName:'StreamerVault', text:'this is a message with emotes Kappa LUL',  displayColor:'#39d353', badges:[] },
-    { displayName:'Sawookie',      text:'Just subscribed! This game looks amazing!',  displayColor:'#8B5CF6', badges:[] },
-    { displayName:'NeonNinja',     text:'Welcome to the stream! Make sure to follow for more content!', displayColor:'#ff4fd8', badges:[] },
-    { displayName:'RocketRacer',   text:'So close! BibleThump PogChamp',              displayColor:'#1E90FF', badges:[] },
-    { displayName:'PixelPirate',   text:'LUL ce stream est incroyable ResidentSleeper', displayColor:'#FF6B35', badges:[] },
-  ];
-  let i = 0;
-  samples.forEach((s, idx) => setTimeout(() => addMsg(s, true), idx * 400));
-  testTimer = setInterval(() => {
-    addMsg(samples[i % samples.length], true);
-    i++;
-  }, 2500);
+  // On affiche exactement MAX_MSGS messages, échelonnés toutes les 350ms
+  const count = MAX_MSGS;
+  for (let i = 0; i < count; i++) {
+    const sample = TEST_POOL[i % TEST_POOL.length];
+    setTimeout(() => addMsg(sample, true), i * 350);
+  }
 }
 
 function stopTestMessages() {
   if (testTimer) { clearInterval(testTimer); testTimer = null; }
+  // Vide le container
+  const c = document.getElementById('chat-container');
+  if (c) [...c.querySelectorAll('.chat-msg')].forEach(el => removeMsg(el));
 }
 
-// ── StreamElements Events ────────────────────────────────────
+// ── StreamElements Events ─────────────────────────────────────
 window.addEventListener('onWidgetLoad', obj => {
   widgetLoaded = true;
   fd = obj?.detail?.fieldData || {};
   applyVars();
 
-  // Charger emotes tierces
   const ch = obj?.detail?.channel;
   if (ch?.providerId) loadThirdPartyEmotes(ch.providerId);
 
   if (fd.enableTestMessages === 'yes') startTestMessages();
 });
 
-// fallback si SE ne déclenche pas onWidgetLoad (preview navigateur)
 window.addEventListener('load', () => {
-  setTimeout(() => { if (!widgetLoaded) { applyVars(); } }, 400);
+  setTimeout(() => { if (!widgetLoaded) applyVars(); }, 400);
 });
 
 window.addEventListener('onEventReceived', obj => {
   const listener = obj?.detail?.listener;
-  /*
-   * ⚠️ Structure réelle SE :
-   * obj.detail.event peut contenir { data: {...} } ou être directement les données
-   */
-  const event = obj?.detail?.event || {};
-  const data  = event.data || event; // ← CRUCIAL : chat-flow fait exactement ça
+  const event    = obj?.detail?.event || {};
+  const data     = event.data || event; // structure réelle SE
 
   if (listener !== 'message') return;
 
