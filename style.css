@@ -1,16 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;0,600;1,600;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,400;1,400;1,700;1,800&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: transparent; width: 100%; height: 100%; overflow: hidden; }
 
-html, body {
-  background: transparent;
-  width: 100%; height: 100%;
-  overflow: hidden;
-}
-
-/* ================================================================
+/* ═══════════════════════════════════════════════════════
    CONTENEUR — barre horizontale fixée en bas
-================================================================ */
+═══════════════════════════════════════════════════════ */
 #chat-container {
   position: fixed;
   bottom: 0; left: 0; right: 0;
@@ -18,48 +13,44 @@ html, body {
   flex-direction: row;
   align-items: flex-end;
   gap: var(--gap, 14px);
-  padding: 0 16px 14px;
+  padding: 0 16px 16px;
   overflow: hidden;
   flex-wrap: nowrap;
 }
 
-/* ================================================================
-   CARTE MESSAGE
-   Structure :
-     .chat-msg
-       .chat-avatar          ← carré bords arrondis
-       .chat-body            ← colonne : topline + bulle
-         .chat-topline       ← ligne : pseudo (gauche) + badges (droite)
-         .chat-bubble        ← transparent + barre droite colorée
-================================================================ */
+/* ═══════════════════════════════════════════════════════
+   CARTE — [AVATAR][BARRE][BULLE]
+   ou en mode sans avatar : [BARRE][BULLE]
+═══════════════════════════════════════════════════════ */
 .chat-msg {
   display: flex;
   flex-direction: row;
-  align-items: flex-start;     /* avatar aligné en haut avec la topline */
+  align-items: stretch;        /* tous les enfants à la même hauteur */
   flex-shrink: 0;
-  gap: 8px;
-  animation: msgIn .32s cubic-bezier(.22,1,.36,1) both;
-  filter: drop-shadow(0 4px 16px rgba(0,0,0,.32));
+  animation: msgIn .30s cubic-bezier(.22,1,.36,1) both;
+  filter: drop-shadow(0 3px 10px rgba(0,0,0,.40));
 }
 .chat-msg.removing {
-  animation: msgOut .30s ease-in forwards;
+  animation: msgOut .28s ease-in forwards;
   pointer-events: none;
 }
 
-/* ================================================================
+/* ═══════════════════════════════════════════════════════
    AVATAR — carré à bords arrondis
-================================================================ */
+   Fond coloré (mauve par défaut), initiale en italique bold
+═══════════════════════════════════════════════════════ */
 .chat-avatar {
   flex-shrink: 0;
   width:  var(--av-size, 58px);
   height: var(--av-size, 58px);
-  border-radius: var(--av-radius, 10px);   /* ← carré bords arrondis */
+  align-self: center;           /* centré verticalement */
+  border-radius: var(--av-radius, 10px);
   overflow: hidden;
-  background: var(--av-bg, #AA4DDA);
-  border: 2px solid var(--av-border, rgba(255,255,255,0.20));
+  background: var(--av-bg, #7C3AED);
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-right: 0;              /* la barre est juste après */
 }
 .chat-avatar img {
   width: 100%; height: 100%;
@@ -67,50 +58,69 @@ html, body {
 }
 .chat-avatar .av-init {
   font-family: var(--font, 'Barlow Condensed', sans-serif);
-  font-size: calc(var(--av-size, 58px) * 0.42);
-  font-weight: 700;
+  font-size: calc(var(--av-size, 58px) * 0.48);
+  font-weight: 800;
+  font-style: italic;
   color: var(--av-color, #fff);
   text-transform: uppercase;
   line-height: 1;
   user-select: none;
 }
 
-/* ================================================================
-   BODY — colonne topline + bulle
-================================================================ */
-.chat-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+/* ═══════════════════════════════════════════════════════
+   BARRE VERTICALE colorée — entre avatar et bulle
+   Toujours présente, fine, de la couleur du pseudo
+═══════════════════════════════════════════════════════ */
+.chat-bar {
+  flex-shrink: 0;
+  width: var(--bar-w, 5px);
+  border-radius: 3px;
+  background: var(--bar-col, #539ef7);
+  align-self: stretch;
+  margin: 4px 0;               /* léger retrait haut/bas */
 }
 
-/* ================================================================
-   TOPLINE — pseudo à gauche, badges à droite, même ligne
-================================================================ */
+/* ═══════════════════════════════════════════════════════
+   BULLE — fond sombre semi-transparent, bords arrondis
+   Contient : topline (pseudo + badges) + texte
+═══════════════════════════════════════════════════════ */
+.chat-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--msg-bg, rgba(15, 18, 45, 0.82));
+  border-radius: 10px;
+  padding: 7px 12px 8px 10px;
+  min-width: 80px;
+  max-width: var(--msg-max-w, 320px);
+}
+
+/* ═══════════════════════════════════════════════════════
+   TOPLINE — pseudo à gauche, badges à droite
+═══════════════════════════════════════════════════════ */
 .chat-topline {
   display: flex;
   flex-direction: row;
   align-items: center;
-  justify-content: space-between;  /* pseudo gauche, badges droite */
-  gap: 8px;
-  padding: 0 2px;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
 }
 
 .chat-name {
   font-family: var(--font, 'Barlow Condensed', sans-serif);
-  font-size:   var(--name-size, 22px);
+  font-size:   var(--name-size, 20px);
   font-weight: 800;
   font-style:  italic;
-  color:       var(--name-color, #039BEF);
+  color:       var(--name-color, #a78bfa);
   text-transform: var(--name-transform, none);
   white-space: nowrap;
   line-height: 1.1;
-  letter-spacing: 0.3px;
-  flex-shrink: 1;
-  min-width: 0;
+  letter-spacing: 0.2px;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .chat-badges {
@@ -121,77 +131,64 @@ html, body {
   margin-left: auto;
 }
 .chat-badges img.badge {
-  width:  var(--badge-sz, 18px);
-  height: var(--badge-sz, 18px);
+  width:  var(--badge-sz, 17px);
+  height: var(--badge-sz, 17px);
   object-fit: contain;
   display: block;
+  vertical-align: middle;
 }
 
-/* ================================================================
-   BULLE — fond transparent + barre colorée à DROITE
-================================================================ */
-.chat-bubble {
-  position: relative;
-  background: var(--msg-bg, rgba(0,0,0,0));  /* transparent */
-  border-right: var(--border-w, 4px) solid var(--border-col, #039BEF);  /* barre droite */
-  border-radius: 0 4px 4px 0;
-  padding: 3px 10px 3px 0;
-  min-width: 60px;
-  max-width: var(--msg-max-w, 300px);
-}
-
-/* ================================================================
+/* ═══════════════════════════════════════════════════════
    TEXTE MESSAGE
-================================================================ */
+═══════════════════════════════════════════════════════ */
 .chat-text {
   font-family: var(--font, 'Barlow Condensed', sans-serif);
-  font-size:   var(--msg-size, 20px);
+  font-size:   var(--msg-size, 18px);
   font-weight: 400;
-  color:       var(--msg-color, #CDEDF2);
-  line-height: 1.3;
+  font-style:  normal;
+  color:       var(--msg-color, #dde9f7);
+  line-height: 1.35;
   word-break:  break-word;
-  display:     inline;  /* texte naturel avec emotes inline */
   white-space: normal;
 }
 .chat-text img.emote {
-  height: calc(var(--msg-size, 20px) * 1.4);
+  height: calc(var(--msg-size, 18px) * 1.45);
   width: auto;
   vertical-align: middle;
   display: inline;
   margin: 0 1px;
 }
 
-/* ================================================================
+/* ═══════════════════════════════════════════════════════
    ANIMATIONS
-================================================================ */
+═══════════════════════════════════════════════════════ */
 @keyframes msgIn {
-  from { opacity: 0; transform: translateY(10px) scale(.97); }
-  to   { opacity: 1; transform: translateY(0)    scale(1);   }
+  from { opacity: 0; transform: translateY(8px) scale(.97); }
+  to   { opacity: 1; transform: translateY(0)   scale(1);   }
 }
 @keyframes msgOut {
   from { opacity: 1; transform: translateX(0)    scale(1);   }
-  to   { opacity: 0; transform: translateX(16px) scale(.95); }
+  to   { opacity: 0; transform: translateX(14px) scale(.95); }
 }
 
-/* ================================================================
+/* ═══════════════════════════════════════════════════════
    CSS CUSTOM PROPERTIES
-================================================================ */
+═══════════════════════════════════════════════════════ */
 :root {
   --font:           'Barlow Condensed', sans-serif;
   --av-size:        58px;
   --av-radius:      10px;
-  --av-bg:          #AA4DDA;
-  --av-border:      rgba(255,255,255,0.20);
+  --av-bg:          #7C3AED;
   --av-color:       #fff;
-  --badge-sz:       18px;
-  --name-color:     #039BEF;
-  --name-size:      22px;
+  --bar-w:          5px;
+  --bar-col:        #539ef7;
+  --badge-sz:       17px;
+  --name-color:     #a78bfa;
+  --name-size:      20px;
   --name-transform: none;
-  --msg-color:      #CDEDF2;
-  --msg-size:       20px;
-  --msg-bg:         rgba(0,0,0,0);
-  --border-w:       4px;
-  --border-col:     #039BEF;
+  --msg-color:      #dde9f7;
+  --msg-size:       18px;
+  --msg-bg:         rgba(15, 18, 45, 0.82);
   --gap:            14px;
-  --msg-max-w:      300px;
+  --msg-max-w:      320px;
 }

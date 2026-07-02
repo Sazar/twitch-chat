@@ -2,20 +2,19 @@
  ================================================================
   Horizontal Twitch Chat — StreamElements Widget
   Structure SE réelle (basée sur chat-flow) :
-    onEventReceived → listener='message'
     data = event.data || event
     data.displayName || data.nick || data.name
     data.displayColor || data.color
     data.emotes → [{id,start,end,urls}] ou {id:["s-e"]}
     data.badges → [{image_url_1x, imageUrl1x, url, image}]
 
-  Structure DOM :
+  DOM généré par addMsg :
     .chat-msg
-      .chat-avatar                  ← carré bords arrondis
-      .chat-body
-        .chat-topline               ← pseudo (gauche) + badges (droite)
-        .chat-bubble                ← transparent + barre droite colorée
-          .chat-text
+      .chat-avatar     ← carré bords arrondis (si activé)
+      .chat-bar        ← barre verticale colorée
+      .chat-bubble
+        .chat-topline  ← [pseudo gauche] [badges droite]
+        .chat-text     ← message
  ================================================================
 */
 
@@ -25,7 +24,7 @@ let widgetLoaded = false;
 let testTimer = null;
 let MAX_MSGS = 6;
 
-// ── Helpers ─────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, m =>
     ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
@@ -43,28 +42,29 @@ function applyVars() {
     document.head.appendChild(lnk);
   }
   const font = fd.googleFont || 'Barlow Condensed';
-  lnk.href = `https://fonts.googleapis.com/css2?family=${font.replace(/ /g,'+')}:ital,wght@0,400;0,700;1,400;1,700&display=swap`;
+  lnk.href = `https://fonts.googleapis.com/css2?family=${font.replace(/ /g,'+')}:ital,wght@0,400;1,400;1,700;1,800&display=swap`;
 
   const R = document.documentElement;
   const set = (k, v) => R.style.setProperty(k, v);
   set('--font',           `'${font}', sans-serif`);
-  set('--av-size',        (parseInt(fd.avatarSize)        || 58) + 'px');
-  set('--av-radius',      (parseInt(fd.avatarRadius)      || 10) + 'px');
-  set('--av-bg',           fd.avatarInitialsBg            || '#AA4DDA');
-  set('--av-color',        fd.avatarInitialsColor         || '#ffffff');
-  set('--av-border',       fd.avatarBorderColor           || 'rgba(255,255,255,0.20)');
-  set('--badge-sz',       (parseInt(fd.badgeSize)         || 18) + 'px');
-  set('--name-color',      fd.usernameColor               || '#039BEF');
-  set('--name-size',      (parseInt(fd.usernameFontSize)  || 22) + 'px');
+  set('--av-size',        (parseInt(fd.avatarSize)       || 58) + 'px');
+  set('--av-radius',      (parseInt(fd.avatarRadius)     || 10) + 'px');
+  set('--av-bg',           fd.avatarInitialsBg           || '#7C3AED');
+  set('--av-color',        fd.avatarInitialsColor        || '#ffffff');
+  set('--bar-w',          (parseInt(fd.borderWidth)      ||  5) + 'px');
+  // --bar-col sera mis à jour par addMsg selon la couleur du viewer
+  // mais on met la valeur par défaut ici
+  set('--bar-col',         fd.borderColor                || '#539ef7');
+  set('--badge-sz',       (parseInt(fd.badgeSize)        || 17) + 'px');
+  set('--name-color',      fd.usernameColor              || '#a78bfa');
+  set('--name-size',      (parseInt(fd.usernameFontSize) || 20) + 'px');
   set('--name-transform',
     fd.usernameTransform === 'uppercase' ? 'uppercase' :
     fd.usernameTransform === 'lowercase' ? 'lowercase' : 'none');
-  set('--msg-color',       fd.messageColor                || '#CDEDF2');
-  set('--msg-size',       (parseInt(fd.messageFontSize)   || 20) + 'px');
-  set('--msg-bg',          fd.messageBg                   || 'rgba(0,0,0,0)');
-  set('--border-w',       (parseInt(fd.borderWidth)       ||  4) + 'px');
-  set('--border-col',      fd.borderColor                 || '#039BEF');
-  set('--gap',            (parseInt(fd.spacing)           || 14) + 'px');
+  set('--msg-color',       fd.messageColor               || '#dde9f7');
+  set('--msg-size',       (parseInt(fd.messageFontSize)  || 18) + 'px');
+  set('--msg-bg',          fd.messageBg                  || 'rgba(15,18,45,0.82)');
+  set('--gap',            (parseInt(fd.spacing)          || 14) + 'px');
 
   const c = document.getElementById('chat-container');
   if (c) c.style.flexDirection =
@@ -157,10 +157,11 @@ function buildAvatar(name, imgUrl) {
   if (fd.showAvatars === 'no') return '';
   const init = esc((name || '?')[0].toUpperCase());
   let inner;
-  if ((fd.avatarMode || 'twitch') === 'twitch' && imgUrl) {
+  if ((fd.avatarMode || 'initials') !== 'initials' && imgUrl) {
     inner = `<img src="${esc(imgUrl)}" alt="${esc(name)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
           + `<span class="av-init" style="display:none">${init}</span>`;
   } else {
+    // Par défaut : initiale (comme sur le screen)
     inner = `<span class="av-init">${init}</span>`;
   }
   return `<div class="chat-avatar">${inner}</div>`;
@@ -183,9 +184,8 @@ function renderText(data, isTest) {
   const frags = data.fragments || (data.message && data.message.fragments);
   if (Array.isArray(frags) && frags.length) {
     return frags.map(part => {
-      if (part.type === 'emote' && part.emote?.id) {
+      if (part.type === 'emote' && part.emote?.id)
         return `<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${part.emote.id}/default/dark/3.0" alt="${esc(part.text||'emote')}" onerror="this.remove()">`;
-      }
       return esc(part.text || '');
     }).join('');
   }
@@ -193,36 +193,30 @@ function renderText(data, isTest) {
 }
 
 // ── Ajout d'un message ────────────────────────────────────────
-// DOM :
-//   .chat-msg
-//     .chat-avatar
-//     .chat-body
-//       .chat-topline  ← [pseudo gauche] + [badges droite]
-//       .chat-bubble   ← transparent + border-right colorée
-//         .chat-text
+// DOM : .chat-msg > [.chat-avatar] + .chat-bar + .chat-bubble(.chat-topline + .chat-text)
 function addMsg(data, isTest) {
   const name    = data.displayName || data.nick || data.name || 'viewer';
-  const nameCol = fd.usernameColorType === 'twitch'
-    ? (data.displayColor || data.color || fd.usernameColor || '#039BEF')
-    : (fd.usernameColor || '#039BEF');
-  const barCol  = fd.usernameColorType === 'twitch'
-    ? (data.displayColor || data.color || fd.borderColor || '#039BEF')
-    : (fd.borderColor || '#039BEF');
+  // Couleur : twitch color du viewer OU couleur custom
+  const color   = fd.usernameColorType === 'twitch'
+    ? (data.displayColor || data.color || fd.usernameColor || '#a78bfa')
+    : (fd.usernameColor || '#a78bfa');
   const imgUrl  = data.profileImageURL || data.profileImage || data.avatar || '';
   const badgesHtml = buildBadges(data.badges || []);
 
   const card = document.createElement('div');
   card.className = 'chat-msg';
   card.innerHTML =
+    // Avatar (carré bords arrondis, initiale par défaut)
     buildAvatar(name, imgUrl) +
-    `<div class="chat-body">
+    // Barre verticale — couleur du pseudo
+    `<div class="chat-bar" style="background:${esc(color)}"></div>` +
+    // Bulle fond sombre
+    `<div class="chat-bubble">
       <div class="chat-topline">
-        <span class="chat-name" style="color:${esc(nameCol)}">${esc(name)}</span>
+        <span class="chat-name" style="color:${esc(color)}">${esc(name)}</span>
         ${badgesHtml}
       </div>
-      <div class="chat-bubble" style="border-right-color:${esc(barCol)}">
-        <div class="chat-text">${renderText(data, isTest)}</div>
-      </div>
+      <div class="chat-text">${renderText(data, isTest)}</div>
     </div>`;
 
   const c = document.getElementById('chat-container');
@@ -245,14 +239,14 @@ function removeMsg(el) {
 
 // ── Messages de test ──────────────────────────────────────────
 const TEST_POOL = [
-  { displayName:'StreamerVault', text:'this is a message with emotes Kappa LUL',            displayColor:'#39d353' },
-  { displayName:'Sawookie',      text:'Just subscribed! This game looks amazing!',            displayColor:'#8B5CF6' },
-  { displayName:'NeonNinja',     text:'Welcome! Make sure to follow for more content!',       displayColor:'#ff4fd8' },
-  { displayName:'RocketRacer',   text:'So close! BibleThump PogChamp',                       displayColor:'#1E90FF' },
-  { displayName:'PixelPirate',   text:'LUL ce stream est incroyable ResidentSleeper',         displayColor:'#FF6B35' },
-  { displayName:'DarkWizard',    text:'GG WP ! Tu gères vraiment bien Kappa',                displayColor:'#9333EA' },
-  { displayName:'StarGazer',     text:'Premier message ici, super stream !',                  displayColor:'#06B6D4' },
-  { displayName:'NightBlaze',    text:'PogChamp PogChamp PogChamp on y est !!',               displayColor:'#F59E0B' },
+  { displayName:'Sawookie',      text:'Just subscribed! This game looks amazing!',            displayColor:'#8B5CF6', badges:[{image_url_1x:'https://static-cdn.jtvnw.net/badges/v1/a3259b9d-5cfb-420a-ab9c-f8579d35c883/1'},{image_url_1x:'https://static-cdn.jtvnw.net/badges/v1/d12a2e27-16f6-41d0-ab77-b780518f00a3/1'}] },
+  { displayName:'StreamerVault', text:'this is a message with emotes Kappa LUL',             displayColor:'#39d353', badges:[{image_url_1x:'https://static-cdn.jtvnw.net/badges/v1/d12a2e27-16f6-41d0-ab77-b780518f00a3/1'}] },
+  { displayName:'NeonNinja',     text:'Welcome to the stream! Make sure to follow for more!', displayColor:'#06B6D4', badges:[{image_url_1x:'https://static-cdn.jtvnw.net/badges/v1/d12a2e27-16f6-41d0-ab77-b780518f00a3/1'}] },
+  { displayName:'RocketRacer',   text:'So close! BibleThump PogChamp',                        displayColor:'#1E90FF', badges:[] },
+  { displayName:'PixelPirate',   text:'LUL ce stream est incroyable ResidentSleeper',          displayColor:'#FF6B35', badges:[] },
+  { displayName:'DarkWizard',    text:'GG WP ! Kappa tu gères vraiment bien',                 displayColor:'#9333EA', badges:[] },
+  { displayName:'StarGazer',     text:'Premier message ici, super stream !',                   displayColor:'#F59E0B', badges:[] },
+  { displayName:'NightBlaze',    text:'PogChamp PogChamp PogChamp on y est !!',                displayColor:'#EC4899', badges:[] },
 ];
 
 function startTestMessages() {
