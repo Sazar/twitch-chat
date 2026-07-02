@@ -1,19 +1,21 @@
 /*
  ================================================================
   Horizontal Twitch Chat — StreamElements Widget
-  Structure SE réelle (basée sur chat-flow qui fonctionne) :
-    onEventReceived → listener = 'message'
+  Structure SE réelle (basée sur chat-flow) :
+    onEventReceived → listener='message'
     data = event.data || event
     data.displayName || data.nick || data.name
     data.displayColor || data.color
-    data.emotes → [{id, start, end, urls}] ou {id:["s-e"]}
+    data.emotes → [{id,start,end,urls}] ou {id:["s-e"]}
     data.badges → [{image_url_1x, imageUrl1x, url, image}]
 
-  Structure DOM générée par addMsg :
+  Structure DOM :
     .chat-msg
-      .chat-avatar          ← cercle, chevauche topline
-      .chat-topline         ← fond coloré : badges + pseudo, chevauche bulle
-      .chat-bubble          ← fond sombre : texte message
+      .chat-avatar                  ← carré bords arrondis
+      .chat-body
+        .chat-topline               ← pseudo (gauche) + badges (droite)
+        .chat-bubble                ← transparent + barre droite colorée
+          .chat-text
  ================================================================
 */
 
@@ -23,7 +25,7 @@ let widgetLoaded = false;
 let testTimer = null;
 let MAX_MSGS = 6;
 
-// ── helpers ───────────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, m =>
     ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
@@ -45,24 +47,24 @@ function applyVars() {
 
   const R = document.documentElement;
   const set = (k, v) => R.style.setProperty(k, v);
-  set('--font',          `'${font}', sans-serif`);
-  set('--av-size',       (parseInt(fd.avatarSize)       || 56)  + 'px');
-  set('--av-bg',          fd.avatarInitialsBg           || '#AA4DDA');
-  set('--av-color',       fd.avatarInitialsColor        || '#ffffff');
-  set('--av-border',      fd.avatarBorderColor          || 'rgba(255,255,255,0.85)');
-  set('--badge-sz',      (parseInt(fd.badgeSize)        || 18)  + 'px');
-  // La couleur du pseudo est blanche sur fond coloré
-  set('--name-color',    '#ffffff');
-  set('--name-size',     (parseInt(fd.usernameFontSize) || 22)  + 'px');
+  set('--font',           `'${font}', sans-serif`);
+  set('--av-size',        (parseInt(fd.avatarSize)        || 58) + 'px');
+  set('--av-radius',      (parseInt(fd.avatarRadius)      || 10) + 'px');
+  set('--av-bg',           fd.avatarInitialsBg            || '#AA4DDA');
+  set('--av-color',        fd.avatarInitialsColor         || '#ffffff');
+  set('--av-border',       fd.avatarBorderColor           || 'rgba(255,255,255,0.20)');
+  set('--badge-sz',       (parseInt(fd.badgeSize)         || 18) + 'px');
+  set('--name-color',      fd.usernameColor               || '#039BEF');
+  set('--name-size',      (parseInt(fd.usernameFontSize)  || 22) + 'px');
   set('--name-transform',
     fd.usernameTransform === 'uppercase' ? 'uppercase' :
     fd.usernameTransform === 'lowercase' ? 'lowercase' : 'none');
-  set('--msg-color',      fd.messageColor               || '#CDEDF2');
-  set('--msg-size',      (parseInt(fd.messageFontSize)  || 20)  + 'px');
-  set('--msg-bg',         fd.messageBg                  || 'rgba(10,16,40,0.88)');
-  // --border-col = couleur de fond de la topline
-  set('--border-col',     fd.borderColor                || '#039BEF');
-  set('--gap',           (parseInt(fd.spacing)          || 12)  + 'px');
+  set('--msg-color',       fd.messageColor                || '#CDEDF2');
+  set('--msg-size',       (parseInt(fd.messageFontSize)   || 20) + 'px');
+  set('--msg-bg',          fd.messageBg                   || 'rgba(0,0,0,0)');
+  set('--border-w',       (parseInt(fd.borderWidth)       ||  4) + 'px');
+  set('--border-col',      fd.borderColor                 || '#039BEF');
+  set('--gap',            (parseInt(fd.spacing)           || 14) + 'px');
 
   const c = document.getElementById('chat-container');
   if (c) c.style.flexDirection =
@@ -73,7 +75,6 @@ function applyVars() {
 function renderEmotes(text, emotes) {
   const chars = Array.from(String(text || ''));
   const map = new Map();
-
   if (Array.isArray(emotes)) {
     emotes.forEach(em => {
       const url = em.urls
@@ -83,10 +84,7 @@ function renderEmotes(text, emotes) {
       const s = Number(em.start !== undefined ? em.start : em.startIndex);
       const e = Number(em.end   !== undefined ? em.end   : em.endIndex);
       if (isNaN(s) || isNaN(e)) return;
-      map.set(s, {
-        end: e,
-        html: `<img class="emote" src="${esc(url)}" alt="${esc(chars.slice(s,e+1).join(''))}" onerror="this.remove()">`
-      });
+      map.set(s, { end: e, html: `<img class="emote" src="${esc(url)}" alt="${esc(chars.slice(s,e+1).join(''))}" onerror="this.remove()">` });
     });
   } else if (emotes && typeof emotes === 'object') {
     for (const [id, positions] of Object.entries(emotes)) {
@@ -94,15 +92,10 @@ function renderEmotes(text, emotes) {
       for (const p of list) {
         const [s, e] = String(p).split('-').map(Number);
         if (isNaN(s) || isNaN(e)) continue;
-        const url = `https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/3.0`;
-        map.set(s, {
-          end: e,
-          html: `<img class="emote" src="${esc(url)}" alt="${esc(chars.slice(s,e+1).join(''))}" onerror="this.remove()">`
-        });
+        map.set(s, { end: e, html: `<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/3.0" alt="${esc(chars.slice(s,e+1).join(''))}" onerror="this.remove()">` });
       }
     }
   }
-
   if (!map.size) return null;
   let out = '', i = 0;
   while (i < chars.length) {
@@ -163,9 +156,8 @@ function buildBadges(badges) {
 function buildAvatar(name, imgUrl) {
   if (fd.showAvatars === 'no') return '';
   const init = esc((name || '?')[0].toUpperCase());
-  const mode = fd.avatarMode || 'twitch';
   let inner;
-  if (mode === 'twitch' && imgUrl) {
+  if ((fd.avatarMode || 'twitch') === 'twitch' && imgUrl) {
     inner = `<img src="${esc(imgUrl)}" alt="${esc(name)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
           + `<span class="av-init" style="display:none">${init}</span>`;
   } else {
@@ -177,65 +169,60 @@ function buildAvatar(name, imgUrl) {
 // ── Rendu texte ───────────────────────────────────────────────
 function renderText(data, isTest) {
   const rawText = String(data.text || data.messageRaw || (data.message && data.message.text) || '');
-
   if (isTest) {
     const testEmotes = [['Kappa','25'],['LUL','425618'],['PogChamp','88'],['BibleThump','33'],['ResidentSleeper','245']];
     let out = esc(rawText);
     testEmotes.forEach(([name, id]) => {
-      out = out.replace(
-        new RegExp(`\\b${escRx(name)}\\b`, 'g'),
-        `<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/3.0" alt="${name}" onerror="this.remove()">`
-      );
+      out = out.replace(new RegExp(`\\b${escRx(name)}\\b`, 'g'),
+        `<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/3.0" alt="${name}" onerror="this.remove()">`);
     });
     return out;
   }
-
   const fromArray = renderEmotes(rawText, data.emotes);
   if (fromArray) return fromArray;
-
   const frags = data.fragments || (data.message && data.message.fragments);
   if (Array.isArray(frags) && frags.length) {
     return frags.map(part => {
-      if (part.type === 'emote' && part.emote && part.emote.id) {
-        const url = `https://static-cdn.jtvnw.net/emoticons/v2/${part.emote.id}/default/dark/3.0`;
-        return `<img class="emote" src="${esc(url)}" alt="${esc(part.text||'emote')}" onerror="this.remove()">`;
+      if (part.type === 'emote' && part.emote?.id) {
+        return `<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${part.emote.id}/default/dark/3.0" alt="${esc(part.text||'emote')}" onerror="this.remove()">`;
       }
       return esc(part.text || '');
     }).join('');
   }
-
   return injectThirdParty(rawText);
 }
 
 // ── Ajout d'un message ────────────────────────────────────────
-// Structure DOM :
+// DOM :
 //   .chat-msg
-//     .chat-avatar            ← photo de profil (cercle)
-//     .chat-topline           ← fond coloré : badges + pseudo
-//     .chat-bubble            ← fond sombre  : texte du message
+//     .chat-avatar
+//     .chat-body
+//       .chat-topline  ← [pseudo gauche] + [badges droite]
+//       .chat-bubble   ← transparent + border-right colorée
+//         .chat-text
 function addMsg(data, isTest) {
-  const name   = data.displayName || data.nick || data.name || 'viewer';
-  // En mode "twitch color", on utilise la couleur du joueur pour la topline
-  const topBg  = fd.usernameColorType === 'twitch'
+  const name    = data.displayName || data.nick || data.name || 'viewer';
+  const nameCol = fd.usernameColorType === 'twitch'
+    ? (data.displayColor || data.color || fd.usernameColor || '#039BEF')
+    : (fd.usernameColor || '#039BEF');
+  const barCol  = fd.usernameColorType === 'twitch'
     ? (data.displayColor || data.color || fd.borderColor || '#039BEF')
     : (fd.borderColor || '#039BEF');
-  const imgUrl = data.profileImageURL || data.profileImage || data.avatar || '';
-
+  const imgUrl  = data.profileImageURL || data.profileImage || data.avatar || '';
   const badgesHtml = buildBadges(data.badges || []);
-  const hasBadges  = badgesHtml !== '';
 
   const card = document.createElement('div');
   card.className = 'chat-msg';
   card.innerHTML =
     buildAvatar(name, imgUrl) +
-    // TOPLINE — fond coloré, badges au-dessus du pseudo
-    `<div class="chat-topline" style="background:${esc(topBg)}">
-      ${ hasBadges ? badgesHtml : '' }
-      <span class="chat-name">${esc(name)}</span>
-    </div>` +
-    // BULLE — fond sombre, texte seulement
-    `<div class="chat-bubble">
-      <div class="chat-text">${renderText(data, isTest)}</div>
+    `<div class="chat-body">
+      <div class="chat-topline">
+        <span class="chat-name" style="color:${esc(nameCol)}">${esc(name)}</span>
+        ${badgesHtml}
+      </div>
+      <div class="chat-bubble" style="border-right-color:${esc(barCol)}">
+        <div class="chat-text">${renderText(data, isTest)}</div>
+      </div>
     </div>`;
 
   const c = document.getElementById('chat-container');
@@ -244,13 +231,11 @@ function addMsg(data, isTest) {
     : c.appendChild(card);
 
   const all = [...c.querySelectorAll('.chat-msg:not(.removing)')];
-  if (all.length > MAX_MSGS) {
+  if (all.length > MAX_MSGS)
     all.slice(0, all.length - MAX_MSGS).forEach(el => removeMsg(el));
-  }
 
-  if ((parseInt(fd.hideAfter) || 0) > 0) {
+  if ((parseInt(fd.hideAfter) || 0) > 0)
     setTimeout(() => removeMsg(card), fd.hideAfter * 1000);
-  }
 }
 
 function removeMsg(el) {
@@ -262,7 +247,7 @@ function removeMsg(el) {
 const TEST_POOL = [
   { displayName:'StreamerVault', text:'this is a message with emotes Kappa LUL',            displayColor:'#39d353' },
   { displayName:'Sawookie',      text:'Just subscribed! This game looks amazing!',            displayColor:'#8B5CF6' },
-  { displayName:'NeonNinja',     text:'Welcome to the stream! Make sure to follow for more!', displayColor:'#ff4fd8' },
+  { displayName:'NeonNinja',     text:'Welcome! Make sure to follow for more content!',       displayColor:'#ff4fd8' },
   { displayName:'RocketRacer',   text:'So close! BibleThump PogChamp',                       displayColor:'#1E90FF' },
   { displayName:'PixelPirate',   text:'LUL ce stream est incroyable ResidentSleeper',         displayColor:'#FF6B35' },
   { displayName:'DarkWizard',    text:'GG WP ! Tu gères vraiment bien Kappa',                displayColor:'#9333EA' },
@@ -272,10 +257,8 @@ const TEST_POOL = [
 
 function startTestMessages() {
   stopTestMessages();
-  for (let i = 0; i < MAX_MSGS; i++) {
-    const sample = TEST_POOL[i % TEST_POOL.length];
-    setTimeout(() => addMsg(sample, true), i * 350);
-  }
+  for (let i = 0; i < MAX_MSGS; i++)
+    setTimeout(() => addMsg(TEST_POOL[i % TEST_POOL.length], true), i * 350);
 }
 
 function stopTestMessages() {
@@ -289,10 +272,8 @@ window.addEventListener('onWidgetLoad', obj => {
   widgetLoaded = true;
   fd = obj?.detail?.fieldData || {};
   applyVars();
-
   const ch = obj?.detail?.channel;
   if (ch?.providerId) loadThirdPartyEmotes(ch.providerId);
-
   if (fd.enableTestMessages === 'yes') startTestMessages();
 });
 
@@ -304,12 +285,9 @@ window.addEventListener('onEventReceived', obj => {
   const listener = obj?.detail?.listener;
   const event    = obj?.detail?.event || {};
   const data     = event.data || event;
-
   if (listener !== 'message') return;
-
   const text = String(data.text || '');
   if (fd.hideCommands === 'yes' && text.startsWith('!')) return;
-
   addMsg(data, false);
 });
 
