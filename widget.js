@@ -8,6 +8,12 @@
     data.displayColor || data.color
     data.emotes → [{id, start, end, urls}] ou {id:["s-e"]}
     data.badges → [{image_url_1x, imageUrl1x, url, image}]
+
+  Structure DOM générée par addMsg :
+    .chat-msg
+      .chat-avatar          ← cercle, chevauche topline
+      .chat-topline         ← fond coloré : badges + pseudo, chevauche bulle
+      .chat-bubble          ← fond sombre : texte message
  ================================================================
 */
 
@@ -15,8 +21,6 @@ let fd = {};
 let thirdPartyEmotes = {};
 let widgetLoaded = false;
 let testTimer = null;
-
-// Valeur par défaut — écrasée par fd.maxMessages au chargement
 let MAX_MSGS = 6;
 
 // ── helpers ───────────────────────────────────────────────────
@@ -42,20 +46,21 @@ function applyVars() {
   const R = document.documentElement;
   const set = (k, v) => R.style.setProperty(k, v);
   set('--font',          `'${font}', sans-serif`);
-  set('--av-size',       (parseInt(fd.avatarSize)       || 62)  + 'px');
+  set('--av-size',       (parseInt(fd.avatarSize)       || 56)  + 'px');
   set('--av-bg',          fd.avatarInitialsBg           || '#AA4DDA');
   set('--av-color',       fd.avatarInitialsColor        || '#ffffff');
   set('--av-border',      fd.avatarBorderColor          || 'rgba(255,255,255,0.85)');
-  set('--badge-sz',      (parseInt(fd.badgeSize)        || 20)  + 'px');
-  set('--name-color',     fd.usernameColor              || '#039BEF');
+  set('--badge-sz',      (parseInt(fd.badgeSize)        || 18)  + 'px');
+  // La couleur du pseudo est blanche sur fond coloré
+  set('--name-color',    '#ffffff');
   set('--name-size',     (parseInt(fd.usernameFontSize) || 22)  + 'px');
   set('--name-transform',
     fd.usernameTransform === 'uppercase' ? 'uppercase' :
     fd.usernameTransform === 'lowercase' ? 'lowercase' : 'none');
   set('--msg-color',      fd.messageColor               || '#CDEDF2');
   set('--msg-size',      (parseInt(fd.messageFontSize)  || 20)  + 'px');
-  set('--msg-bg',         fd.messageBg                  || 'rgba(10,16,40,0.85)');
-  set('--border-w',      (parseInt(fd.borderWidth)      || 12)  + 'px');
+  set('--msg-bg',         fd.messageBg                  || 'rgba(10,16,40,0.88)');
+  // --border-col = couleur de fond de la topline
   set('--border-col',     fd.borderColor                || '#039BEF');
   set('--gap',           (parseInt(fd.spacing)          || 12)  + 'px');
 
@@ -185,11 +190,9 @@ function renderText(data, isTest) {
     return out;
   }
 
-  // 1) Emotes tableau (SE moderne)
   const fromArray = renderEmotes(rawText, data.emotes);
   if (fromArray) return fromArray;
 
-  // 2) Fragments
   const frags = data.fragments || (data.message && data.message.fragments);
   if (Array.isArray(frags) && frags.length) {
     return frags.map(part => {
@@ -201,27 +204,37 @@ function renderText(data, isTest) {
     }).join('');
   }
 
-  // 3) Fallback texte + emotes tierces
   return injectThirdParty(rawText);
 }
 
 // ── Ajout d'un message ────────────────────────────────────────
+// Structure DOM :
+//   .chat-msg
+//     .chat-avatar            ← photo de profil (cercle)
+//     .chat-topline           ← fond coloré : badges + pseudo
+//     .chat-bubble            ← fond sombre  : texte du message
 function addMsg(data, isTest) {
-  const name  = data.displayName || data.nick || data.name || 'viewer';
-  const color = fd.usernameColorType === 'twitch'
-    ? (data.displayColor || data.color || fd.usernameColor || '#039BEF')
-    : (fd.usernameColor || '#039BEF');
+  const name   = data.displayName || data.nick || data.name || 'viewer';
+  // En mode "twitch color", on utilise la couleur du joueur pour la topline
+  const topBg  = fd.usernameColorType === 'twitch'
+    ? (data.displayColor || data.color || fd.borderColor || '#039BEF')
+    : (fd.borderColor || '#039BEF');
   const imgUrl = data.profileImageURL || data.profileImage || data.avatar || '';
+
+  const badgesHtml = buildBadges(data.badges || []);
+  const hasBadges  = badgesHtml !== '';
 
   const card = document.createElement('div');
   card.className = 'chat-msg';
   card.innerHTML =
     buildAvatar(name, imgUrl) +
+    // TOPLINE — fond coloré, badges au-dessus du pseudo
+    `<div class="chat-topline" style="background:${esc(topBg)}">
+      ${ hasBadges ? badgesHtml : '' }
+      <span class="chat-name">${esc(name)}</span>
+    </div>` +
+    // BULLE — fond sombre, texte seulement
     `<div class="chat-bubble">
-      <div class="chat-meta">
-        ${buildBadges(data.badges || [])}
-        <span class="chat-name" style="color:${esc(color)}">${esc(name)}</span>
-      </div>
       <div class="chat-text">${renderText(data, isTest)}</div>
     </div>`;
 
@@ -230,7 +243,6 @@ function addMsg(data, isTest) {
     ? c.insertBefore(card, c.firstChild)
     : c.appendChild(card);
 
-  // Supprime les messages en trop
   const all = [...c.querySelectorAll('.chat-msg:not(.removing)')];
   if (all.length > MAX_MSGS) {
     all.slice(0, all.length - MAX_MSGS).forEach(el => removeMsg(el));
@@ -247,23 +259,20 @@ function removeMsg(el) {
 }
 
 // ── Messages de test ──────────────────────────────────────────
-// Affiche exactement MAX_MSGS messages en une seule passe, sans boucle infinie
 const TEST_POOL = [
-  { displayName:'StreamerVault', text:'this is a message with emotes Kappa LUL',           displayColor:'#39d353' },
-  { displayName:'Sawookie',      text:'Just subscribed! This game looks amazing!',           displayColor:'#8B5CF6' },
-  { displayName:'NeonNinja',     text:'Welcome to the stream! Make sure to follow for more!',displayColor:'#ff4fd8' },
-  { displayName:'RocketRacer',   text:'So close! BibleThump PogChamp',                      displayColor:'#1E90FF' },
-  { displayName:'PixelPirate',   text:'LUL ce stream est incroyable ResidentSleeper',        displayColor:'#FF6B35' },
-  { displayName:'DarkWizard',    text:'GG WP ! Tu gères vraiment bien Kappa',               displayColor:'#9333EA' },
-  { displayName:'StarGazer',     text:'Premier message ici, super stream !',                 displayColor:'#06B6D4' },
-  { displayName:'NightBlaze',    text:'PogChamp PogChamp PogChamp on y est !!',              displayColor:'#F59E0B' },
+  { displayName:'StreamerVault', text:'this is a message with emotes Kappa LUL',            displayColor:'#39d353' },
+  { displayName:'Sawookie',      text:'Just subscribed! This game looks amazing!',            displayColor:'#8B5CF6' },
+  { displayName:'NeonNinja',     text:'Welcome to the stream! Make sure to follow for more!', displayColor:'#ff4fd8' },
+  { displayName:'RocketRacer',   text:'So close! BibleThump PogChamp',                       displayColor:'#1E90FF' },
+  { displayName:'PixelPirate',   text:'LUL ce stream est incroyable ResidentSleeper',         displayColor:'#FF6B35' },
+  { displayName:'DarkWizard',    text:'GG WP ! Tu gères vraiment bien Kappa',                displayColor:'#9333EA' },
+  { displayName:'StarGazer',     text:'Premier message ici, super stream !',                  displayColor:'#06B6D4' },
+  { displayName:'NightBlaze',    text:'PogChamp PogChamp PogChamp on y est !!',               displayColor:'#F59E0B' },
 ];
 
 function startTestMessages() {
   stopTestMessages();
-  // On affiche exactement MAX_MSGS messages, échelonnés toutes les 350ms
-  const count = MAX_MSGS;
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < MAX_MSGS; i++) {
     const sample = TEST_POOL[i % TEST_POOL.length];
     setTimeout(() => addMsg(sample, true), i * 350);
   }
@@ -271,7 +280,6 @@ function startTestMessages() {
 
 function stopTestMessages() {
   if (testTimer) { clearInterval(testTimer); testTimer = null; }
-  // Vide le container
   const c = document.getElementById('chat-container');
   if (c) [...c.querySelectorAll('.chat-msg')].forEach(el => removeMsg(el));
 }
@@ -295,7 +303,7 @@ window.addEventListener('load', () => {
 window.addEventListener('onEventReceived', obj => {
   const listener = obj?.detail?.listener;
   const event    = obj?.detail?.event || {};
-  const data     = event.data || event; // structure réelle SE
+  const data     = event.data || event;
 
   if (listener !== 'message') return;
 
