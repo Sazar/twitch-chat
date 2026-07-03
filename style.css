@@ -61,15 +61,7 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
   min-width: 0;
 }
 
-/*
-  TOPLINE — à cheval
-  Le bord BAS du pseudo = le bord HAUT de la bulle
-  => margin-bottom = -(hauteur totale du pseudo)
-  hauteur = name-size * line-height(1.1) ≈ name-size * 1.1
-  On veut que la MOITIé soit dans la bulle :
-  => margin-bottom = -(name-size * 1.1 * 0.5) = -(name-size * 0.55)
-  Mais on était trop haut, on réduit à 0.5 pour descendre encore un peu
-*/
+/* Pseudo à cheval : moitié au-dessus, moitié dans la bulle */
 .chat-topline {
   display: flex;
   flex-direction: row;
@@ -80,7 +72,7 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
   min-width: max-content;
   z-index: 2;
   position: relative;
-  margin-bottom: calc(var(--name-size, 15px) * -0.7);
+  margin-bottom: calc(var(--name-size, 15px) * -0.55);
 }
 
 .chat-name {
@@ -130,11 +122,11 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
   background: var(--msg-bg, rgba(15, 18, 45, 0.82));
   border-radius: 0 10px 10px 0;
   /*
-    padding-top = moitié hauteur pseudo (laisse la place au chevauchement)
-    = name-size * 0.7  (même facteur que margin-bottom)
-    padding bas/droite/gauche : serrés
+    padding-top = juste assez pour que le pseudo ne chevauche pas le texte
+    = name-size * 0.55 (même facteur que margin-bottom)
+    padding serré sur les autres côtés
   */
-  padding: calc(var(--name-size, 15px) * 0.7) 10px 6px 8px;
+  padding: calc(var(--name-size, 15px) * 0.55) 10px 5px 8px;
   min-width: 0;
   max-width: var(--msg-max-w, 320px);
 }
