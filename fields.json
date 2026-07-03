@@ -73,6 +73,19 @@
     "max": 50,
     "step": 1
   },
+  "showMessageText": {
+    "type": "checkbox",
+    "label": "Show Message Text",
+    "value": true
+  },
+  "messageFontSize": {
+    "type": "slider",
+    "label": "Message Font Size",
+    "value": 20,
+    "min": 10,
+    "max": 60,
+    "step": 1
+  },
   "usernameTransform": {
     "type": "dropdown",
     "label": "Username Text Transform",
@@ -113,14 +126,6 @@
     "max": 60,
     "step": 1
   },
-  "messageFontSize": {
-    "type": "slider",
-    "label": "Message Font Size",
-    "value": 20,
-    "min": 10,
-    "max": 60,
-    "step": 1
-  },
   "borderWidth": {
     "type": "slider",
     "label": "Message Left Border Width",
@@ -143,7 +148,7 @@
   "googleFont": {
     "type": "text",
     "label": "Google Font Name",
-    "value": "Barlow Condensed"
+    "value": "Montserrat"
   },
   "spacing": {
     "type": "slider",
