@@ -212,9 +212,7 @@ async function addMsg(data, isTest) {
 
   const card = document.createElement('div');
   card.className = 'chat-msg';
-  // Classe animation entrée selon option
-  const animIn = fd.animIn || 'slideUp';
-  card.classList.add(`anim-in-${animIn}`);
+  card.classList.add(`anim-in-${fd.animIn || 'slideUp'}`);
 
   card.innerHTML =
     buildAvatar(name, twitchCol, photoUrl) +
@@ -240,8 +238,7 @@ async function addMsg(data, isTest) {
 
 function removeMsg(el) {
   el.classList.add('removing');
-  const animOut = fd.animOut || 'slideDown';
-  el.classList.add(`anim-out-${animOut}`);
+  el.classList.add(`anim-out-${fd.animOut || 'slideDown'}`);
   setTimeout(()=>el.parentNode?.removeChild(el), 300);
 }
 
@@ -265,16 +262,33 @@ function stopTestMessages() {
   if(c)[...c.querySelectorAll('.chat-msg')].forEach(el=>removeMsg(el));
 }
 
-window.addEventListener('onWidgetLoad',obj=>{
-  widgetLoaded=true; fd=obj?.detail?.fieldData||{}; applyVars();
-  const ch=obj?.detail?.channel; if(ch?.providerId)loadThirdPartyEmotes(ch.providerId);
-  if(fd.enableTestMessages===true||fd.enableTestMessages==='true') startTestMessages();
+// Chargement initial
+window.addEventListener('onWidgetLoad', obj => {
+  widgetLoaded = true;
+  fd = obj?.detail?.fieldData || {};
+  applyVars();
+  const ch = obj?.detail?.channel;
+  if (ch?.providerId) loadThirdPartyEmotes(ch.providerId);
+  if (fd.enableTestMessages===true||fd.enableTestMessages==='true') startTestMessages();
 });
-window.addEventListener('load',()=>{setTimeout(()=>{if(!widgetLoaded)applyVars();},400);});
-window.addEventListener('onEventReceived',obj=>{
+
+// Mise à jour en temps réel quand une option change dans l'éditeur SE
+window.addEventListener('onWidgetLoad', obj => {
+  const newFd = obj?.detail?.fieldData;
+  if (!newFd || !widgetLoaded) return;
+  fd = newFd;
+  applyVars();
+  if (fd.enableTestMessages===true||fd.enableTestMessages==='true') startTestMessages();
+  else stopTestMessages();
+});
+
+window.addEventListener('load', () => { setTimeout(()=>{ if(!widgetLoaded) applyVars(); }, 400); });
+
+window.addEventListener('onEventReceived', obj => {
   const listener=obj?.detail?.listener, event=obj?.detail?.event||{}, data=event.data||event;
-  if(listener!=='message')return;
-  if(fd.hideCommands==='yes'&&String(data.text||'').startsWith('!'))return;
-  addMsg(data,false);
+  if (listener!=='message') return;
+  if (fd.hideCommands==='yes'&&String(data.text||'').startsWith('!')) return;
+  addMsg(data, false);
 });
-document.addEventListener('DOMContentLoaded',applyVars);
+
+document.addEventListener('DOMContentLoaded', applyVars);
