@@ -106,9 +106,9 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
   margin-bottom: calc(var(--name-size, 15px) * -0.55);
 }
 
-/* mode comic : le pseudo se décale pour compenser le dépassement du slash */
+/* mode comic : pas de barre, pseudo aligné depuis le bord gauche de la bulle */
 .chat-msg--comic .chat-topline {
-  padding-left: calc(var(--bar-w, 5px) * 1.6 + 8px);
+  padding-left: 10px;
 }
 
 .chat-name {
@@ -141,6 +141,7 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
   flex-direction: row;
   align-items: stretch;
   min-width: 0;
+  position: relative;
 }
 
 /* ============================================================
@@ -154,26 +155,13 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
   align-self: stretch;
 }
 
-/* ============================================================
-   LEFT BORDER — MODE COMIC (slash BD /)
-   Parallelograme incliné qui dépasse en haut et en bas
-   comme le "/" de la vignette BD
-============================================================ */
-.chat-bar--comic {
-  border-radius: 3px;
-  transform: skewX(-12deg);
-  transform-origin: center;
-  /* légèrement plus large pour que le skew reste visible */
-  width: calc(var(--bar-w, 5px) * 1.4);
-  margin-right: 2px;
-  /* dépasse un peu en haut pour simuler la queue de la bulle BD */
-  margin-top: calc(var(--name-size, 15px) * -0.6);
-  margin-bottom: -3px;
-  align-self: stretch;
+/* En mode comic on cache la barre */
+.chat-msg--comic .chat-bar {
+  display: none;
 }
 
 /* ============================================================
-   BULLE
+   BULLE — MODE SIMPLE
 ============================================================ */
 .chat-bubble {
   flex: 1;
@@ -184,6 +172,54 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
   padding: calc(var(--name-size, 15px) * 0.55) 10px 5px 8px;
   min-width: 0;
   max-width: var(--msg-max-w, 320px);
+  position: relative;
+}
+
+/* ============================================================
+   BULLE — MODE COMIC
+   Coins ronds partout + queue BD qui pointe vers l'avatar
+============================================================ */
+.chat-msg--comic .chat-bubble {
+  border-radius: 10px;
+  padding: calc(var(--name-size, 15px) * 0.55) 10px 8px 10px;
+  overflow: visible;
+}
+
+/*
+  Queue de bulle BD — double triangle comme l'image de référence :
+  ::after  = triangle de fond (couleur bulle) — par-dessus
+  ::before = triangle de contour (couleur barre) — en dessous, plus grand
+
+  Les deux partent du coin bas-gauche de la bulle
+  et pointent vers l'avatar (vers le bas-gauche).
+*/
+.chat-msg--comic .chat-bubble::before,
+.chat-msg--comic .chat-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 16px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+}
+
+/* Contour BD : triangle plus grand, couleur de la barre */
+.chat-msg--comic .chat-bubble::before {
+  border-width: 0 0 20px 12px;
+  border-color: transparent transparent var(--bar-col, #539ef7) transparent;
+  bottom: -20px;
+  left: 14px;
+  z-index: 1;
+}
+
+/* Remplissage : triangle de la couleur de la bulle, légèrement plus petit */
+.chat-msg--comic .chat-bubble::after {
+  border-width: 0 0 16px 9px;
+  border-color: transparent transparent var(--msg-bg, rgba(15,18,45,0.82)) transparent;
+  bottom: -16px;
+  left: 16px;
+  z-index: 2;
 }
 
 .chat-text {
