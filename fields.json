@@ -127,6 +127,12 @@
     "max": 60,
     "step": 1
   },
+  "borderStyle": {
+    "type": "dropdown",
+    "label": "Left Border Style",
+    "value": "simple",
+    "options": { "simple": "Simple", "comic": "Comic (slash BD)" }
+  },
   "borderColorType": {
     "type": "dropdown",
     "label": "Left Border Color",

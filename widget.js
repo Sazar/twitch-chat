@@ -201,6 +201,7 @@ async function addMsg(data, isTest) {
   const nameColor = fd.usernameColorType==='twitch' ? twitchCol : (fd.usernameColor||'#a78bfa');
   const barColor  = getBarColor(twitchCol);
   const badgesHtml = buildBadges(data.badges||[]);
+  const isComic   = fd.borderStyle === 'comic';
 
   const emoteUrls = isTest ? [] : collectEmoteUrls(data);
   const [photoUrl] = await Promise.all([
@@ -212,7 +213,11 @@ async function addMsg(data, isTest) {
 
   const card = document.createElement('div');
   card.className = 'chat-msg';
+  if (isComic) card.classList.add('chat-msg--comic');
   card.classList.add(`anim-in-${fd.animIn || 'slideUp'}`);
+
+  // La barre : classe de base + classe comic si besoin
+  const barClass = isComic ? 'chat-bar chat-bar--comic' : 'chat-bar';
 
   card.innerHTML =
     buildAvatar(name, twitchCol, photoUrl) +
@@ -222,7 +227,7 @@ async function addMsg(data, isTest) {
         ${badgesHtml}
       </div>
       <div class="chat-row">
-        <div class="chat-bar" style="background:${esc(barColor)}"></div>
+        <div class="${barClass}" style="background:${esc(barColor)}"></div>
         <div class="chat-bubble">
           <div class="chat-text">${textHtml}</div>
         </div>
@@ -262,7 +267,6 @@ function stopTestMessages() {
   if(c)[...c.querySelectorAll('.chat-msg')].forEach(el=>removeMsg(el));
 }
 
-// Chargement initial
 window.addEventListener('onWidgetLoad', obj => {
   widgetLoaded = true;
   fd = obj?.detail?.fieldData || {};
@@ -272,7 +276,6 @@ window.addEventListener('onWidgetLoad', obj => {
   if (fd.enableTestMessages===true||fd.enableTestMessages==='true') startTestMessages();
 });
 
-// Mise à jour en temps réel quand une option change dans l'éditeur SE
 window.addEventListener('onWidgetLoad', obj => {
   const newFd = obj?.detail?.fieldData;
   if (!newFd || !widgetLoaded) return;
