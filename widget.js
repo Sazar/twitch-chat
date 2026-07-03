@@ -8,10 +8,11 @@ let fd = {};
 let thirdPartyEmotes = {};
 let widgetLoaded = false;
 let MAX_MSGS = 6;
-const avatarCache = new Map();
+const avatarCache = new Map(); // username -> url|null
+const imagePreloadCache = new Set(); // urls déjà préchargées
 
 function esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, m =>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  return String(s ?? '').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 function escRx(s) { return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
 
@@ -46,36 +47,78 @@ function applyVars() {
 function getBarColor(twitchColor) {
   return fd.borderColorType === 'custom' ? (fd.borderColor || '#539ef7') : twitchColor;
 }
-
 function getAvatarBorderColor(twitchColor) {
   return fd.avatarBorderColorType === 'custom' ? (fd.avatarBorderColor || '#a78bfa') : twitchColor;
 }
 
+/* Précharge une image dans le cache navigateur, retourne une Promise */
+function preloadImage(url) {
+  if (!url || imagePreloadCache.has(url)) return Promise.resolve();
+  imagePreloadCache.add(url);
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = img.onerror = resolve;
+    img.src = url;
+  });
+}
+
+/* Fetch avatar Twitch via decapi.me + précharge dans le cache navigateur */
 async function fetchAvatar(username) {
   if (!username) return null;
   const key = username.toLowerCase();
-  if (avatarCache.has(key)) return avatarCache.get(key);
-  avatarCache.set(key, null);
-  try {
-    const r = await fetch(`https://decapi.me/twitch/avatar/${encodeURIComponent(key)}`);
-    if (!r.ok) return null;
-    const url = (await r.text()).trim();
-    if (url && url.startsWith('http')) { avatarCache.set(key, url); return url; }
-  } catch(e) {}
-  return null;
+  if (avatarCache.has(key)) {
+    // Si en cours de fetch (valeur = Promise), on attend
+    const v = avatarCache.get(key);
+    if (v instanceof Promise) return v;
+    return v; // url string ou null
+  }
+  const promise = (async () => {
+    try {
+      const r = await fetch(`https://decapi.me/twitch/avatar/${encodeURIComponent(key)}`);
+      if (!r.ok) return null;
+      const url = (await r.text()).trim();
+      if (url && url.startsWith('http')) {
+        await preloadImage(url); // précharge AVANT de résoudre
+        avatarCache.set(key, url);
+        return url;
+      }
+    } catch(e) {}
+    avatarCache.set(key, null);
+    return null;
+  })();
+  avatarCache.set(key, promise);
+  const result = await promise;
+  avatarCache.set(key, result);
+  return result;
 }
 
-function injectAvatarPhoto(avatarEl, url, name) {
-  if (!avatarEl || !url) return;
-  if (avatarEl.querySelector('img.av-photo')) return;
-  const img = document.createElement('img');
-  img.className = 'av-photo';
-  img.alt = name;
-  img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;position:absolute;top:0;left:0;border-radius:inherit;';
-  img.onerror = () => img.remove();
-  img.src = url;
-  avatarEl.style.position = 'relative';
-  avatarEl.appendChild(img);
+/* Précharge toutes les images d'emotes présentes dans le HTML généré */
+function preloadEmoteUrls(urls) {
+  return Promise.all(urls.map(u => preloadImage(u)));
+}
+
+function collectEmoteUrls(data) {
+  const urls = [];
+  if (Array.isArray(data.emotes)) {
+    data.emotes.forEach(em => {
+      const url = em.urls
+        ? (em.urls['2']||em.urls['1']||em.urls['4']||Object.values(em.urls)[0]||'')
+        : (em.id ? `https://static-cdn.jtvnw.net/emoticons/v2/${em.id}/default/dark/3.0` : '');
+      if (url) urls.push(url);
+    });
+  } else if (data.emotes && typeof data.emotes === 'object') {
+    for (const id of Object.keys(data.emotes)) {
+      urls.push(`https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/3.0`);
+    }
+  }
+  const frags = data.fragments||(data.message&&data.message.fragments);
+  if (Array.isArray(frags)) {
+    frags.forEach(p => { if (p.type==='emote'&&p.emote?.id) urls.push(`https://static-cdn.jtvnw.net/emoticons/v2/${p.emote.id}/default/dark/3.0`); });
+  }
+  // 3rd party
+  const rawText = String(data.text||data.messageRaw||(data.message&&data.message.text)||'');
+  rawText.split(/\s+/).forEach(tok => { if (thirdPartyEmotes[tok]) urls.push(thirdPartyEmotes[tok]); });
+  return [...new Set(urls)];
 }
 
 function renderEmotes(text, emotes) {
@@ -87,7 +130,7 @@ function renderEmotes(text, emotes) {
       if (!url) return;
       const s=Number(em.start!==undefined?em.start:em.startIndex), e=Number(em.end!==undefined?em.end:em.endIndex);
       if (isNaN(s)||isNaN(e)) return;
-      map.set(s,{end:e,html:`<img class="emote" src="${esc(url)}" alt="${esc(chars.slice(s,e+1).join(''))}" onerror="this.remove()">`});
+      map.set(s,{end:e,html:`<img class="emote" src="${esc(url)}" alt="${esc(chars.slice(s,e+1).join(''))}">`});
     });
   } else if (emotes&&typeof emotes==='object') {
     for (const [id,positions] of Object.entries(emotes)) {
@@ -95,7 +138,7 @@ function renderEmotes(text, emotes) {
       for (const p of list) {
         const [s,e]=String(p).split('-').map(Number);
         if (isNaN(s)||isNaN(e)) continue;
-        map.set(s,{end:e,html:`<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/3.0" alt="${esc(chars.slice(s,e+1).join(''))}" onerror="this.remove()">`});
+        map.set(s,{end:e,html:`<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/3.0" alt="${esc(chars.slice(s,e+1).join(''))}">`});
       }
     }
   }
@@ -114,7 +157,7 @@ async function loadThirdPartyEmotes(channelId) {
 function injectThirdParty(text) {
   return String(text||'').split(/(\s+)/).map(tok=>{
     if(/^\s+$/.test(tok))return tok;
-    return thirdPartyEmotes[tok]?`<img class="emote" src="${esc(thirdPartyEmotes[tok])}" alt="${esc(tok)}" onerror="this.remove()">`:esc(tok);
+    return thirdPartyEmotes[tok]?`<img class="emote" src="${esc(thirdPartyEmotes[tok])}" alt="${esc(tok)}">`:esc(tok);
   }).join('');
 }
 
@@ -129,10 +172,16 @@ function buildBadges(badges) {
   return imgs?`<span class="chat-badges">${imgs}</span>`:'';
 }
 
-function buildAvatar(name, twitchColor) {
+function buildAvatar(name, twitchColor, photoUrl) {
   if (fd.showAvatars === 'no') return '';
   const init        = esc((name || '?')[0].toUpperCase());
   const borderColor = getAvatarBorderColor(twitchColor);
+  if (fd.avatarMode === 'twitch' && photoUrl) {
+    // Photo déjà en cache navigateur, pas de flash
+    return `<div class="chat-avatar" style="border-color:${esc(borderColor)};position:relative">`
+         + `<img class="av-photo" src="${esc(photoUrl)}" alt="${esc(name)}" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:inherit;">`
+         + `</div>`;
+  }
   return `<div class="chat-avatar" style="border-color:${esc(borderColor)}">`
        + `<span class="av-init">${init}</span>`
        + `</div>`;
@@ -143,7 +192,7 @@ function renderText(data, isTest) {
   if (isTest) {
     const te=[['Kappa','25'],['LUL','425618'],['PogChamp','88'],['BibleThump','33'],['ResidentSleeper','245']];
     let out=esc(rawText);
-    te.forEach(([n,id])=>{ out=out.replace(new RegExp(`\\b${escRx(n)}\\b`,'g'),`<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/3.0" alt="${n}" onerror="this.remove()">`); });
+    te.forEach(([n,id])=>{ out=out.replace(new RegExp(`\\b${escRx(n)}\\b`,'g'),`<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/3.0" alt="${n}">`); });
     return out;
   }
   const fromArray = renderEmotes(rawText, data.emotes);
@@ -151,7 +200,7 @@ function renderText(data, isTest) {
   const frags = data.fragments||(data.message&&data.message.fragments);
   if (Array.isArray(frags)&&frags.length) {
     return frags.map(part=>{
-      if(part.type==='emote'&&part.emote?.id) return `<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${part.emote.id}/default/dark/3.0" alt="${esc(part.text||'emote')}" onerror="this.remove()">`;
+      if(part.type==='emote'&&part.emote?.id) return `<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${part.emote.id}/default/dark/3.0" alt="${esc(part.text||'emote')}">` ;
       return esc(part.text||'');
     }).join('');
   }
@@ -164,12 +213,20 @@ async function addMsg(data, isTest) {
   const nameColor = fd.usernameColorType==='twitch' ? twitchCol : (fd.usernameColor||'#a78bfa');
   const barColor  = getBarColor(twitchCol);
   const badgesHtml = buildBadges(data.badges||[]);
-  const textHtml   = renderText(data, isTest);
+
+  // Précharge avatar + emotes EN PARALLÈLE avant d'insérer dans le DOM
+  const emoteUrls = isTest ? [] : collectEmoteUrls(data);
+  const [photoUrl] = await Promise.all([
+    (fd.avatarMode === 'twitch' && !isTest) ? fetchAvatar(name) : Promise.resolve(null),
+    preloadEmoteUrls(emoteUrls)
+  ]);
+
+  const textHtml = renderText(data, isTest);
 
   const card = document.createElement('div');
   card.className = 'chat-msg';
   card.innerHTML =
-    buildAvatar(name, twitchCol) +
+    buildAvatar(name, twitchCol, photoUrl) +
     `<div class="chat-body">
       <div class="chat-topline">
         <span class="chat-name" style="color:${esc(nameColor)}">${esc(name)}</span>
@@ -188,11 +245,6 @@ async function addMsg(data, isTest) {
   const all=[...c.querySelectorAll('.chat-msg:not(.removing)')];
   if(all.length>MAX_MSGS) all.slice(0,all.length-MAX_MSGS).forEach(el=>removeMsg(el));
   if((parseInt(fd.hideAfter)||0)>0) setTimeout(()=>removeMsg(card),fd.hideAfter*1000);
-
-  if (fd.avatarMode==='twitch' && !isTest) {
-    const avatarEl = card.querySelector('.chat-avatar');
-    fetchAvatar(name).then(url => { if (url) injectAvatarPhoto(avatarEl, url, name); });
-  }
 }
 
 function removeMsg(el) {
@@ -223,7 +275,6 @@ function stopTestMessages() {
 window.addEventListener('onWidgetLoad',obj=>{
   widgetLoaded=true; fd=obj?.detail?.fieldData||{}; applyVars();
   const ch=obj?.detail?.channel; if(ch?.providerId)loadThirdPartyEmotes(ch.providerId);
-  // checkbox renvoie true/false ou "true"/"false" selon SE
   if(fd.enableTestMessages===true||fd.enableTestMessages==='true') startTestMessages();
 });
 window.addEventListener('load',()=>{setTimeout(()=>{if(!widgetLoaded)applyVars();},400);});
