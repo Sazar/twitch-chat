@@ -2,13 +2,13 @@
  ================================================================
   Horizontal Twitch Chat — StreamElements Widget
 
-  DOM généré par addMsg :
+  DOM :
     .chat-msg
-      .chat-avatar
+      .chat-avatar   ← toujours visible : photo ou initiale
       .chat-body
-        .chat-topline   ← pseudo + badges (à cheval via margin-bottom négatif)
+        .chat-topline  ← pseudo + badges (à cheval)
         .chat-row
-          .chat-bar     ← barre colorée (hauteur = bulle)
+          .chat-bar
           .chat-bubble
             .chat-text
  ================================================================
@@ -96,18 +96,29 @@ function injectThirdParty(text) {
 function buildBadges(badges) {
   if (fd.showBadges==='no') return '';
   if (!Array.isArray(badges)||!badges.length) return '';
-  const imgs=badges.map(b=>{if(!b)return'';const url=b.image_url_1x||b.imageUrl1x||b.url||b.image||'';return url?`<img class="badge" src="${esc(url)}" alt="" onerror="this.remove()">`:''}).join('');
-  return imgs?`<span class="chat-badges">${imgs}</span>`:""
+  const imgs=badges.map(b=>{
+    if(!b) return '';
+    const url=b.image_url_1x||b.imageUrl1x||b.url||b.image||'';
+    return url?`<img class="badge" src="${esc(url)}" alt="" onerror="this.remove()">`:'';
+  }).join('');
+  return imgs?`<span class="chat-badges">${imgs}</span>`:'';
 }
 
+// Avatar : TOUJOURS affiché
+// - Si photo dispo ET mode 'twitch' : photo (fallback initiale)
+// - Sinon : initiale (comportement du screen)
 function buildAvatar(name, imgUrl, color) {
-  if (fd.showAvatars==='no') return '';
-  const init=esc((name||'?')[0].toUpperCase());
+  if (fd.showAvatars === 'no') return '';
+  const init = esc((name || '?')[0].toUpperCase());
   let inner;
-  if ((fd.avatarMode||'initials')!=='initials'&&imgUrl) {
-    inner=`<img src="${esc(imgUrl)}" alt="${esc(name)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`+`<span class="av-init" style="display:none">${init}</span>`;
+  if (fd.avatarMode === 'twitch' && imgUrl) {
+    // Photo Twitch avec fallback initiale
+    inner = `<img src="${esc(imgUrl)}" alt="${esc(name)}"
+              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+          + `<span class="av-init" style="display:none">${init}</span>`;
   } else {
-    inner=`<span class="av-init">${init}</span>`;
+    // Initiale par défaut (comme sur le screen)
+    inner = `<span class="av-init">${init}</span>`;
   }
   return `<div class="chat-avatar" style="border-color:${esc(color)}">${inner}</div>`;
 }
@@ -117,7 +128,10 @@ function renderText(data, isTest) {
   if (isTest) {
     const te=[['Kappa','25'],['LUL','425618'],['PogChamp','88'],['BibleThump','33'],['ResidentSleeper','245']];
     let out=esc(rawText);
-    te.forEach(([n,id])=>{out=out.replace(new RegExp(`\\b${escRx(n)}\\b`,'g'),`<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/3.0" alt="${n}" onerror="this.remove()">`);});
+    te.forEach(([n,id])=>{
+      out=out.replace(new RegExp(`\\b${escRx(n)}\\b`,'g'),
+        `<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/3.0" alt="${n}" onerror="this.remove()">`);
+    });
     return out;
   }
   const fromArray=renderEmotes(rawText,data.emotes);
@@ -125,7 +139,8 @@ function renderText(data, isTest) {
   const frags=data.fragments||(data.message&&data.message.fragments);
   if (Array.isArray(frags)&&frags.length) {
     return frags.map(part=>{
-      if(part.type==='emote'&&part.emote?.id)return`<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${part.emote.id}/default/dark/3.0" alt="${esc(part.text||'emote')}" onerror="this.remove()">`;
+      if(part.type==='emote'&&part.emote?.id)
+        return `<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${part.emote.id}/default/dark/3.0" alt="${esc(part.text||'emote')}" onerror="this.remove()">`;
       return esc(part.text||'');
     }).join('');
   }
@@ -173,7 +188,7 @@ const TEST_POOL = [
   { displayName:'Sawookie',      text:'Just subscribed! This game looks amazing!',            displayColor:'#8B5CF6', badges:[{image_url_1x:'https://static-cdn.jtvnw.net/badges/v1/a3259b9d-5cfb-420a-ab9c-f8579d35c883/1'},{image_url_1x:'https://static-cdn.jtvnw.net/badges/v1/d12a2e27-16f6-41d0-ab77-b780518f00a3/1'}] },
   { displayName:'StreamerVault', text:'this is a message with emotes Kappa LUL',             displayColor:'#39d353', badges:[{image_url_1x:'https://static-cdn.jtvnw.net/badges/v1/d12a2e27-16f6-41d0-ab77-b780518f00a3/1'}] },
   { displayName:'NeonNinja',     text:'Welcome! Make sure to follow for more!',               displayColor:'#06B6D4', badges:[{image_url_1x:'https://static-cdn.jtvnw.net/badges/v1/d12a2e27-16f6-41d0-ab77-b780518f00a3/1'}] },
-  { displayName:'RocketRacer',   text:'GG',                                                   displayColor:'#1E90FF', badges:[] },
+  { displayName:'RocketRacer',   text:'So close! BibleThump PogChamp',                        displayColor:'#1E90FF', badges:[] },
   { displayName:'PixelPirate',   text:'LUL',                                                  displayColor:'#FF6B35', badges:[] },
   { displayName:'DarkWizard',    text:'GG WP ! Kappa',                                        displayColor:'#9333EA', badges:[] },
   { displayName:'StarGazerXXL',  text:'ok',                                                   displayColor:'#F59E0B', badges:[{image_url_1x:'https://static-cdn.jtvnw.net/badges/v1/a3259b9d-5cfb-420a-ab9c-f8579d35c883/1'},{image_url_1x:'https://static-cdn.jtvnw.net/badges/v1/d12a2e27-16f6-41d0-ab77-b780518f00a3/1'}] },

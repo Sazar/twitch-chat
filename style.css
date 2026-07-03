@@ -3,9 +3,6 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { background: transparent; width: 100%; height: 100%; overflow: hidden; }
 
-/* ================================================================
-   CONTENEUR
-================================================================ */
 #chat-container {
   position: fixed;
   bottom: 0; left: 0; right: 0;
@@ -18,12 +15,6 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
   flex-wrap: nowrap;
 }
 
-/* ================================================================
-   CARTE  :  [AVATAR] [CHAT-BODY]
-   CHAT-BODY :
-     .chat-topline   ← pseudo + badges (à cheval)
-     .chat-row       ← [barre] [bulle]
-================================================================ */
 .chat-msg {
   display: flex;
   flex-direction: row;
@@ -38,9 +29,7 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
   pointer-events: none;
 }
 
-/* ================================================================
-   AVATAR
-================================================================ */
+/* AVATAR — carré bords arrondis, toujours visible */
 .chat-avatar {
   flex-shrink: 0;
   width:  var(--av-size, 56px);
@@ -51,8 +40,9 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2.5px solid transparent;
+  border: 2.5px solid transparent; /* coloré via JS */
   align-self: flex-end;
+  flex-shrink: 0;
 }
 .chat-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
 .chat-avatar .av-init {
@@ -66,9 +56,7 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
   user-select: none;
 }
 
-/* ================================================================
-   CHAT-BODY
-================================================================ */
+/* BODY */
 .chat-body {
   display: flex;
   flex-direction: column;
@@ -76,17 +64,12 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
   min-width: 0;
 }
 
-/* ================================================================
-   TOPLINE — pseudo + badges
-   padding-left = largeur barre + gap → pseudo jamais au-dessus de la barre
-   margin-bottom négatif → à cheval sur le haut de la bulle
-================================================================ */
+/* TOPLINE — pseudo + badges, à cheval sur le haut de la bulle */
 .chat-topline {
   display: flex;
   flex-direction: row;
   align-items: center;
   gap: 5px;
-  /* décalage gauche = barre (5px) + gap entre barre et bulle (0) + padding bulle (8px) */
   padding-left: calc(var(--bar-w, 5px) + 8px);
   padding-right: 6px;
   min-width: max-content;
@@ -120,9 +103,7 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
   display: block;
 }
 
-/* ================================================================
-   CHAT-ROW — [barre] [bulle] à la même hauteur
-================================================================ */
+/* ROW : barre + bulle */
 .chat-row {
   display: flex;
   flex-direction: row;
@@ -130,25 +111,20 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
   min-width: 0;
 }
 
-/* ================================================================
-   BARRE VERTICALE
-   Bords arrondis : identiques à la bulle
-   - côté gauche (extérieur) : arrondi
-   - côté droit  (jonction)   : plat (0)
-================================================================ */
+/*
+  BARRE — bords gauche = miroir des bords droite de la bulle
+  Bulle droite : border-radius 0 10px 10px 0
+  Barre gauche : border-radius 10px 0 0 10px  (symétrique)
+*/
 .chat-bar {
   flex-shrink: 0;
   width: var(--bar-w, 5px);
-  border-radius: 4px 0 0 10px;  /* haut-gauche | haut-droit | bas-droit | bas-gauche */
+  border-radius: 10px 0 0 10px;
   background: var(--bar-col, #539ef7);
   align-self: stretch;
 }
 
-/* ================================================================
-   BULLE
-   - côté gauche (jonction barre) : plat (0)
-   - côté droit (extérieur)       : arrondi
-================================================================ */
+/* BULLE */
 .chat-bubble {
   flex: 1;
   display: flex;
@@ -160,9 +136,7 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
   max-width: var(--msg-max-w, 320px);
 }
 
-/* ================================================================
-   TEXTE MESSAGE
-================================================================ */
+/* TEXTE */
 .chat-text {
   font-family: var(--font, 'Barlow Condensed', sans-serif);
   font-size:   var(--msg-size, 18px);
@@ -180,9 +154,6 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
   margin: 0 1px;
 }
 
-/* ================================================================
-   ANIMATIONS
-================================================================ */
 @keyframes msgIn {
   from { opacity:0; transform:translateY(8px) scale(.97); }
   to   { opacity:1; transform:translateY(0)   scale(1);   }
@@ -192,9 +163,6 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
   to   { opacity:0; transform:translateX(14px) scale(.95); }
 }
 
-/* ================================================================
-   CSS CUSTOM PROPERTIES
-================================================================ */
 :root {
   --font:           'Barlow Condensed', sans-serif;
   --av-size:        56px;
