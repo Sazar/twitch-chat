@@ -1,24 +1,16 @@
 /*
  ================================================================
   Horizontal Twitch Chat — StreamElements Widget
-
-  DOM :
-    .chat-msg
-      .chat-avatar   ← toujours visible : photo ou initiale
-      .chat-body
-        .chat-topline  ← pseudo + badges (à cheval)
-        .chat-row
-          .chat-bar
-          .chat-bubble
-            .chat-text
  ================================================================
 */
 
 let fd = {};
 let thirdPartyEmotes = {};
 let widgetLoaded = false;
-let testTimer = null;
 let MAX_MSGS = 6;
+
+// Cache avatar URL par username (évite les appels répétés)
+const avatarCache = new Map();
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, m =>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -29,8 +21,8 @@ function applyVars() {
   MAX_MSGS = Math.max(1, parseInt(fd.maxMessages) || 6);
   let lnk = document.getElementById('_gf');
   if (!lnk) { lnk = document.createElement('link'); lnk.id='_gf'; lnk.rel='stylesheet'; document.head.appendChild(lnk); }
-  const font = fd.googleFont || 'Barlow Condensed';
-  lnk.href = `https://fonts.googleapis.com/css2?family=${font.replace(/ /g,'+')}:ital,wght@0,400;1,400;1,700;1,800&display=swap`;
+  const font = fd.googleFont || 'Montserrat';
+  lnk.href = `https://fonts.googleapis.com/css2?family=${font.replace(/ /g,'+')}:ital,wght@0,400;0,500;1,700;1,800&display=swap`;
   const R = document.documentElement;
   const set = (k,v) => R.style.setProperty(k,v);
   set('--font',          `'${font}', sans-serif`);
@@ -39,18 +31,59 @@ function applyVars() {
   set('--av-bg',          fd.avatarInitialsBg           || '#7C3AED');
   set('--av-color',       fd.avatarInitialsColor        || '#ffffff');
   set('--bar-w',         (parseInt(fd.borderWidth)      ||  5) + 'px');
-  set('--badge-sz',      (parseInt(fd.badgeSize)        || 17) + 'px');
+  set('--badge-sz',      (parseInt(fd.badgeSize)        || 15) + 'px');
   set('--name-color',     fd.usernameColor              || '#a78bfa');
-  set('--name-size',     (parseInt(fd.usernameFontSize) || 20) + 'px');
+  set('--name-size',     (parseInt(fd.usernameFontSize) || 15) + 'px');
   set('--name-transform',
     fd.usernameTransform==='uppercase'?'uppercase':
     fd.usernameTransform==='lowercase'?'lowercase':'none');
   set('--msg-color',      fd.messageColor               || '#dde9f7');
-  set('--msg-size',      (parseInt(fd.messageFontSize)  || 18) + 'px');
+  set('--msg-size',      (parseInt(fd.messageFontSize)  || 13) + 'px');
   set('--msg-bg',         fd.messageBg                  || 'rgba(15,18,45,0.82)');
   set('--gap',           (parseInt(fd.spacing)          || 14) + 'px');
   const c = document.getElementById('chat-container');
   if (c) c.style.flexDirection = fd.scrollDirection==='right-to-left'?'row-reverse':'row';
+}
+
+/* ================================================================
+   FETCH AVATAR TWITCH via decapi.me (pas d'auth nécessaire)
+   Retourne l'URL de la photo ou null
+================================================================ */
+async function fetchAvatar(username) {
+  if (!username) return null;
+  const key = username.toLowerCase();
+  if (avatarCache.has(key)) return avatarCache.get(key);
+  // Marque comme en cours pour éviter les requêtes parallèles
+  avatarCache.set(key, null);
+  try {
+    const r = await fetch(`https://decapi.me/twitch/avatar/${encodeURIComponent(key)}`);
+    if (!r.ok) return null;
+    const url = (await r.text()).trim();
+    // decapi renvoie l'URL directement en texte brut
+    if (url && url.startsWith('http')) {
+      avatarCache.set(key, url);
+      return url;
+    }
+  } catch(e) {}
+  return null;
+}
+
+/* ================================================================
+   Injecte la photo dans l'avatar une fois fetchée
+================================================================ */
+function injectAvatarPhoto(avatarEl, url, name) {
+  if (!avatarEl || !url) return;
+  const init = avatarEl.querySelector('.av-init');
+  const existing = avatarEl.querySelector('img.av-photo');
+  if (existing) return;
+  const img = document.createElement('img');
+  img.className = 'av-photo';
+  img.alt = name;
+  img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;position:absolute;top:0;left:0;';
+  img.onerror = () => img.remove();
+  img.src = url;
+  avatarEl.style.position = 'relative';
+  avatarEl.appendChild(img);
 }
 
 function renderEmotes(text, emotes) {
@@ -104,26 +137,17 @@ function buildBadges(badges) {
   return imgs?`<span class="chat-badges">${imgs}</span>`:'';
 }
 
-// Avatar : TOUJOURS affiché
-// - Si photo dispo ET mode 'twitch' : photo (fallback initiale)
-// - Sinon : initiale (comportement du screen)
-function buildAvatar(name, imgUrl, color) {
+function buildAvatar(name, color) {
   if (fd.showAvatars === 'no') return '';
   const init = esc((name || '?')[0].toUpperCase());
-  let inner;
-  if (fd.avatarMode === 'twitch' && imgUrl) {
-    // Photo Twitch avec fallback initiale
-    inner = `<img src="${esc(imgUrl)}" alt="${esc(name)}"
-              onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
-          + `<span class="av-init" style="display:none">${init}</span>`;
-  } else {
-    // Initiale par défaut (comme sur le screen)
-    inner = `<span class="av-init">${init}</span>`;
-  }
-  return `<div class="chat-avatar" style="border-color:${esc(color)}">${inner}</div>`;
+  // Toujours l'initiale d'abord, la photo sera injectée après le fetch
+  return `<div class="chat-avatar" style="border-color:${esc(color)}">`
+       + `<span class="av-init">${init}</span>`
+       + `</div>`;
 }
 
 function renderText(data, isTest) {
+  if (fd.showMessageText === false || fd.showMessageText === 'false') return '';
   const rawText=String(data.text||data.messageRaw||(data.message&&data.message.text)||'');
   if (isTest) {
     const te=[['Kappa','25'],['LUL','425618'],['PogChamp','88'],['BibleThump','33'],['ResidentSleeper','245']];
@@ -147,18 +171,18 @@ function renderText(data, isTest) {
   return injectThirdParty(rawText);
 }
 
-function addMsg(data, isTest) {
+async function addMsg(data, isTest) {
   const name   = data.displayName||data.nick||data.name||'viewer';
   const color  = fd.usernameColorType==='twitch'
     ?(data.displayColor||data.color||fd.usernameColor||'#a78bfa')
     :(fd.usernameColor||'#a78bfa');
-  const imgUrl = data.profileImageURL||data.profileImage||data.avatar||'';
   const badgesHtml = buildBadges(data.badges||[]);
+  const textHtml   = renderText(data, isTest);
 
   const card = document.createElement('div');
   card.className = 'chat-msg';
   card.innerHTML =
-    buildAvatar(name, imgUrl, color) +
+    buildAvatar(name, color) +
     `<div class="chat-body">
       <div class="chat-topline">
         <span class="chat-name" style="color:${esc(color)}">${esc(name)}</span>
@@ -167,7 +191,7 @@ function addMsg(data, isTest) {
       <div class="chat-row">
         <div class="chat-bar" style="background:${esc(color)}"></div>
         <div class="chat-bubble">
-          <div class="chat-text">${renderText(data,isTest)}</div>
+          <div class="chat-text">${textHtml}</div>
         </div>
       </div>
     </div>`;
@@ -177,6 +201,14 @@ function addMsg(data, isTest) {
   const all=[...c.querySelectorAll('.chat-msg:not(.removing)')];
   if(all.length>MAX_MSGS) all.slice(0,all.length-MAX_MSGS).forEach(el=>removeMsg(el));
   if((parseInt(fd.hideAfter)||0)>0) setTimeout(()=>removeMsg(card),fd.hideAfter*1000);
+
+  // Fetch photo Twitch en arrière-plan si mode twitch activé
+  if (fd.avatarMode === 'twitch' && !isTest) {
+    const avatarEl = card.querySelector('.chat-avatar');
+    fetchAvatar(name).then(url => {
+      if (url) injectAvatarPhoto(avatarEl, url, name);
+    });
+  }
 }
 
 function removeMsg(el) {
@@ -185,14 +217,14 @@ function removeMsg(el) {
 }
 
 const TEST_POOL = [
-  { displayName:'Sawookie',      text:'Just subscribed! This game looks amazing!',            displayColor:'#8B5CF6', badges:[{image_url_1x:'https://static-cdn.jtvnw.net/badges/v1/a3259b9d-5cfb-420a-ab9c-f8579d35c883/1'},{image_url_1x:'https://static-cdn.jtvnw.net/badges/v1/d12a2e27-16f6-41d0-ab77-b780518f00a3/1'}] },
-  { displayName:'StreamerVault', text:'this is a message with emotes Kappa LUL',             displayColor:'#39d353', badges:[{image_url_1x:'https://static-cdn.jtvnw.net/badges/v1/d12a2e27-16f6-41d0-ab77-b780518f00a3/1'}] },
-  { displayName:'NeonNinja',     text:'Welcome! Make sure to follow for more!',               displayColor:'#06B6D4', badges:[{image_url_1x:'https://static-cdn.jtvnw.net/badges/v1/d12a2e27-16f6-41d0-ab77-b780518f00a3/1'}] },
-  { displayName:'RocketRacer',   text:'So close! BibleThump PogChamp',                        displayColor:'#1E90FF', badges:[] },
-  { displayName:'PixelPirate',   text:'LUL',                                                  displayColor:'#FF6B35', badges:[] },
-  { displayName:'DarkWizard',    text:'GG WP ! Kappa',                                        displayColor:'#9333EA', badges:[] },
-  { displayName:'StarGazerXXL',  text:'ok',                                                   displayColor:'#F59E0B', badges:[{image_url_1x:'https://static-cdn.jtvnw.net/badges/v1/a3259b9d-5cfb-420a-ab9c-f8579d35c883/1'},{image_url_1x:'https://static-cdn.jtvnw.net/badges/v1/d12a2e27-16f6-41d0-ab77-b780518f00a3/1'}] },
-  { displayName:'NightBlaze',    text:'PogChamp PogChamp on y est !!',                        displayColor:'#EC4899', badges:[] },
+  { displayName:'Sawookie',      text:'Just subscribed! This game looks amazing!', displayColor:'#8B5CF6', badges:[{image_url_1x:'https://static-cdn.jtvnw.net/badges/v1/a3259b9d-5cfb-420a-ab9c-f8579d35c883/1'},{image_url_1x:'https://static-cdn.jtvnw.net/badges/v1/d12a2e27-16f6-41d0-ab77-b780518f00a3/1'}] },
+  { displayName:'StreamerVault', text:'this is a message with emotes Kappa LUL',  displayColor:'#39d353', badges:[{image_url_1x:'https://static-cdn.jtvnw.net/badges/v1/d12a2e27-16f6-41d0-ab77-b780518f00a3/1'}] },
+  { displayName:'NeonNinja',     text:'Welcome! Make sure to follow for more!',    displayColor:'#06B6D4', badges:[{image_url_1x:'https://static-cdn.jtvnw.net/badges/v1/d12a2e27-16f6-41d0-ab77-b780518f00a3/1'}] },
+  { displayName:'RocketRacer',   text:'So close! BibleThump PogChamp',             displayColor:'#1E90FF', badges:[] },
+  { displayName:'PixelPirate',   text:'LUL',                                       displayColor:'#FF6B35', badges:[] },
+  { displayName:'DarkWizard',    text:'GG WP ! Kappa',                             displayColor:'#9333EA', badges:[] },
+  { displayName:'StarGazerXXL',  text:'ok',                                        displayColor:'#F59E0B', badges:[{image_url_1x:'https://static-cdn.jtvnw.net/badges/v1/a3259b9d-5cfb-420a-ab9c-f8579d35c883/1'},{image_url_1x:'https://static-cdn.jtvnw.net/badges/v1/d12a2e27-16f6-41d0-ab77-b780518f00a3/1'}] },
+  { displayName:'NightBlaze',    text:'PogChamp PogChamp on y est !!',             displayColor:'#EC4899', badges:[] },
 ];
 
 function startTestMessages() {
@@ -200,7 +232,6 @@ function startTestMessages() {
   for(let i=0;i<MAX_MSGS;i++) setTimeout(()=>addMsg(TEST_POOL[i%TEST_POOL.length],true),i*350);
 }
 function stopTestMessages() {
-  if(testTimer){clearInterval(testTimer);testTimer=null;}
   const c=document.getElementById('chat-container');
   if(c)[...c.querySelectorAll('.chat-msg')].forEach(el=>removeMsg(el));
 }
