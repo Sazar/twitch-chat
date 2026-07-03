@@ -43,15 +43,14 @@ function applyVars() {
   if (c) c.style.flexDirection = fd.scrollDirection==='right-to-left'?'row-reverse':'row';
 }
 
-/* Couleur de la barre gauche selon l'option borderColorType */
+/* Couleur barre gauche */
 function getBarColor(twitchColor) {
-  if (fd.borderColorType === 'custom') return fd.borderColor || '#539ef7';
-  return twitchColor; // 'twitch' = couleur du pseudo
+  return fd.borderColorType === 'custom' ? (fd.borderColor || '#539ef7') : twitchColor;
 }
 
-/* Couleur du border avatar : toujours avatarBorderColor du field */
-function getAvatarBorderColor() {
-  return fd.avatarBorderColor || '#a78bfa';
+/* Couleur border avatar */
+function getAvatarBorderColor(twitchColor) {
+  return fd.avatarBorderColorType === 'custom' ? (fd.avatarBorderColor || '#a78bfa') : twitchColor;
 }
 
 async function fetchAvatar(username) {
@@ -132,10 +131,10 @@ function buildBadges(badges) {
   return imgs?`<span class="chat-badges">${imgs}</span>`:'';
 }
 
-function buildAvatar(name) {
+function buildAvatar(name, twitchColor) {
   if (fd.showAvatars === 'no') return '';
   const init        = esc((name || '?')[0].toUpperCase());
-  const borderColor = getAvatarBorderColor();
+  const borderColor = getAvatarBorderColor(twitchColor);
   return `<div class="chat-avatar" style="border-color:${esc(borderColor)}">`
        + `<span class="av-init">${init}</span>`
        + `</div>`;
@@ -172,7 +171,7 @@ async function addMsg(data, isTest) {
   const card = document.createElement('div');
   card.className = 'chat-msg';
   card.innerHTML =
-    buildAvatar(name) +
+    buildAvatar(name, twitchCol) +
     `<div class="chat-body">
       <div class="chat-topline">
         <span class="chat-name" style="color:${esc(nameColor)}">${esc(name)}</span>

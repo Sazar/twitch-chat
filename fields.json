@@ -1,4 +1,10 @@
 {
+  "enableTestMessages": {
+    "type": "dropdown",
+    "label": "Enable Test Messages",
+    "value": "no",
+    "options": { "yes": "Yes", "no": "No" }
+  },
   "hideAfter": {
     "type": "number",
     "label": "Hide Message After (seconds)",
@@ -48,9 +54,15 @@
     "label": "Avatar Initials Text Color",
     "value": "#FFFFFF"
   },
+  "avatarBorderColorType": {
+    "type": "dropdown",
+    "label": "Avatar Border Color",
+    "value": "twitch",
+    "options": { "twitch": "Twitch Username Color", "custom": "Custom Color" }
+  },
   "avatarBorderColor": {
     "type": "colorpicker",
-    "label": "Avatar Border Color",
+    "label": "Avatar Border Custom Color",
     "value": "#a78bfa"
   },
   "showBadges": {
@@ -147,11 +159,5 @@
     "min": 0,
     "max": 60,
     "step": 1
-  },
-  "enableTestMessages": {
-    "type": "dropdown",
-    "label": "Enable Test Messages",
-    "value": "no",
-    "options": { "yes": "Yes", "no": "No" }
   }
 }
