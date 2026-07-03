@@ -8,8 +8,6 @@ let fd = {};
 let thirdPartyEmotes = {};
 let widgetLoaded = false;
 let MAX_MSGS = 6;
-
-// Cache avatar URL par username (évite les appels répétés)
 const avatarCache = new Map();
 
 function esc(s) {
@@ -45,41 +43,38 @@ function applyVars() {
   if (c) c.style.flexDirection = fd.scrollDirection==='right-to-left'?'row-reverse':'row';
 }
 
-/* ================================================================
-   FETCH AVATAR TWITCH via decapi.me (pas d'auth nécessaire)
-   Retourne l'URL de la photo ou null
-================================================================ */
+/* Couleur de la barre gauche selon l'option borderColorType */
+function getBarColor(twitchColor) {
+  if (fd.borderColorType === 'custom') return fd.borderColor || '#539ef7';
+  return twitchColor; // 'twitch' = couleur du pseudo
+}
+
+/* Couleur du border avatar : toujours avatarBorderColor du field */
+function getAvatarBorderColor() {
+  return fd.avatarBorderColor || '#a78bfa';
+}
+
 async function fetchAvatar(username) {
   if (!username) return null;
   const key = username.toLowerCase();
   if (avatarCache.has(key)) return avatarCache.get(key);
-  // Marque comme en cours pour éviter les requêtes parallèles
   avatarCache.set(key, null);
   try {
     const r = await fetch(`https://decapi.me/twitch/avatar/${encodeURIComponent(key)}`);
     if (!r.ok) return null;
     const url = (await r.text()).trim();
-    // decapi renvoie l'URL directement en texte brut
-    if (url && url.startsWith('http')) {
-      avatarCache.set(key, url);
-      return url;
-    }
+    if (url && url.startsWith('http')) { avatarCache.set(key, url); return url; }
   } catch(e) {}
   return null;
 }
 
-/* ================================================================
-   Injecte la photo dans l'avatar une fois fetchée
-================================================================ */
 function injectAvatarPhoto(avatarEl, url, name) {
   if (!avatarEl || !url) return;
-  const init = avatarEl.querySelector('.av-init');
-  const existing = avatarEl.querySelector('img.av-photo');
-  if (existing) return;
+  if (avatarEl.querySelector('img.av-photo')) return;
   const img = document.createElement('img');
   img.className = 'av-photo';
   img.alt = name;
-  img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;position:absolute;top:0;left:0;';
+  img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;position:absolute;top:0;left:0;border-radius:inherit;';
   img.onerror = () => img.remove();
   img.src = url;
   avatarEl.style.position = 'relative';
@@ -137,34 +132,29 @@ function buildBadges(badges) {
   return imgs?`<span class="chat-badges">${imgs}</span>`:'';
 }
 
-function buildAvatar(name, color) {
+function buildAvatar(name) {
   if (fd.showAvatars === 'no') return '';
-  const init = esc((name || '?')[0].toUpperCase());
-  // Toujours l'initiale d'abord, la photo sera injectée après le fetch
-  return `<div class="chat-avatar" style="border-color:${esc(color)}">`
+  const init        = esc((name || '?')[0].toUpperCase());
+  const borderColor = getAvatarBorderColor();
+  return `<div class="chat-avatar" style="border-color:${esc(borderColor)}">`
        + `<span class="av-init">${init}</span>`
        + `</div>`;
 }
 
 function renderText(data, isTest) {
-  if (fd.showMessageText === false || fd.showMessageText === 'false') return '';
-  const rawText=String(data.text||data.messageRaw||(data.message&&data.message.text)||'');
+  const rawText = String(data.text||data.messageRaw||(data.message&&data.message.text)||'');
   if (isTest) {
     const te=[['Kappa','25'],['LUL','425618'],['PogChamp','88'],['BibleThump','33'],['ResidentSleeper','245']];
     let out=esc(rawText);
-    te.forEach(([n,id])=>{
-      out=out.replace(new RegExp(`\\b${escRx(n)}\\b`,'g'),
-        `<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/3.0" alt="${n}" onerror="this.remove()">`);
-    });
+    te.forEach(([n,id])=>{ out=out.replace(new RegExp(`\\b${escRx(n)}\\b`,'g'),`<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/3.0" alt="${n}" onerror="this.remove()">`); });
     return out;
   }
-  const fromArray=renderEmotes(rawText,data.emotes);
+  const fromArray = renderEmotes(rawText, data.emotes);
   if (fromArray) return fromArray;
-  const frags=data.fragments||(data.message&&data.message.fragments);
+  const frags = data.fragments||(data.message&&data.message.fragments);
   if (Array.isArray(frags)&&frags.length) {
     return frags.map(part=>{
-      if(part.type==='emote'&&part.emote?.id)
-        return `<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${part.emote.id}/default/dark/3.0" alt="${esc(part.text||'emote')}" onerror="this.remove()">`;
+      if(part.type==='emote'&&part.emote?.id) return `<img class="emote" src="https://static-cdn.jtvnw.net/emoticons/v2/${part.emote.id}/default/dark/3.0" alt="${esc(part.text||'emote')}" onerror="this.remove()">`;
       return esc(part.text||'');
     }).join('');
   }
@@ -172,24 +162,24 @@ function renderText(data, isTest) {
 }
 
 async function addMsg(data, isTest) {
-  const name   = data.displayName||data.nick||data.name||'viewer';
-  const color  = fd.usernameColorType==='twitch'
-    ?(data.displayColor||data.color||fd.usernameColor||'#a78bfa')
-    :(fd.usernameColor||'#a78bfa');
+  const name      = data.displayName||data.nick||data.name||'viewer';
+  const twitchCol = data.displayColor||data.color||fd.usernameColor||'#a78bfa';
+  const nameColor = fd.usernameColorType==='twitch' ? twitchCol : (fd.usernameColor||'#a78bfa');
+  const barColor  = getBarColor(twitchCol);
   const badgesHtml = buildBadges(data.badges||[]);
   const textHtml   = renderText(data, isTest);
 
   const card = document.createElement('div');
   card.className = 'chat-msg';
   card.innerHTML =
-    buildAvatar(name, color) +
+    buildAvatar(name) +
     `<div class="chat-body">
       <div class="chat-topline">
-        <span class="chat-name" style="color:${esc(color)}">${esc(name)}</span>
+        <span class="chat-name" style="color:${esc(nameColor)}">${esc(name)}</span>
         ${badgesHtml}
       </div>
       <div class="chat-row">
-        <div class="chat-bar" style="background:${esc(color)}"></div>
+        <div class="chat-bar" style="background:${esc(barColor)}"></div>
         <div class="chat-bubble">
           <div class="chat-text">${textHtml}</div>
         </div>
@@ -202,12 +192,9 @@ async function addMsg(data, isTest) {
   if(all.length>MAX_MSGS) all.slice(0,all.length-MAX_MSGS).forEach(el=>removeMsg(el));
   if((parseInt(fd.hideAfter)||0)>0) setTimeout(()=>removeMsg(card),fd.hideAfter*1000);
 
-  // Fetch photo Twitch en arrière-plan si mode twitch activé
-  if (fd.avatarMode === 'twitch' && !isTest) {
+  if (fd.avatarMode==='twitch' && !isTest) {
     const avatarEl = card.querySelector('.chat-avatar');
-    fetchAvatar(name).then(url => {
-      if (url) injectAvatarPhoto(avatarEl, url, name);
-    });
+    fetchAvatar(name).then(url => { if (url) injectAvatarPhoto(avatarEl, url, name); });
   }
 }
 
