@@ -8,8 +8,8 @@ let fd = {};
 let thirdPartyEmotes = {};
 let widgetLoaded = false;
 let MAX_MSGS = 6;
-const avatarCache = new Map(); // username -> url|null
-const imagePreloadCache = new Set(); // urls déjà préchargées
+const avatarCache = new Map();
+const imagePreloadCache = new Set();
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -51,26 +51,19 @@ function getAvatarBorderColor(twitchColor) {
   return fd.avatarBorderColorType === 'custom' ? (fd.avatarBorderColor || '#a78bfa') : twitchColor;
 }
 
-/* Précharge une image dans le cache navigateur, retourne une Promise */
 function preloadImage(url) {
   if (!url || imagePreloadCache.has(url)) return Promise.resolve();
   imagePreloadCache.add(url);
-  return new Promise(resolve => {
-    const img = new Image();
-    img.onload = img.onerror = resolve;
-    img.src = url;
-  });
+  return new Promise(resolve => { const i=new Image(); i.onload=i.onerror=resolve; i.src=url; });
 }
 
-/* Fetch avatar Twitch via decapi.me + précharge dans le cache navigateur */
 async function fetchAvatar(username) {
   if (!username) return null;
   const key = username.toLowerCase();
   if (avatarCache.has(key)) {
-    // Si en cours de fetch (valeur = Promise), on attend
     const v = avatarCache.get(key);
     if (v instanceof Promise) return v;
-    return v; // url string ou null
+    return v;
   }
   const promise = (async () => {
     try {
@@ -78,7 +71,7 @@ async function fetchAvatar(username) {
       if (!r.ok) return null;
       const url = (await r.text()).trim();
       if (url && url.startsWith('http')) {
-        await preloadImage(url); // précharge AVANT de résoudre
+        await preloadImage(url);
         avatarCache.set(key, url);
         return url;
       }
@@ -92,7 +85,6 @@ async function fetchAvatar(username) {
   return result;
 }
 
-/* Précharge toutes les images d'emotes présentes dans le HTML généré */
 function preloadEmoteUrls(urls) {
   return Promise.all(urls.map(u => preloadImage(u)));
 }
@@ -107,15 +99,12 @@ function collectEmoteUrls(data) {
       if (url) urls.push(url);
     });
   } else if (data.emotes && typeof data.emotes === 'object') {
-    for (const id of Object.keys(data.emotes)) {
+    for (const id of Object.keys(data.emotes))
       urls.push(`https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/3.0`);
-    }
   }
   const frags = data.fragments||(data.message&&data.message.fragments);
-  if (Array.isArray(frags)) {
+  if (Array.isArray(frags))
     frags.forEach(p => { if (p.type==='emote'&&p.emote?.id) urls.push(`https://static-cdn.jtvnw.net/emoticons/v2/${p.emote.id}/default/dark/3.0`); });
-  }
-  // 3rd party
   const rawText = String(data.text||data.messageRaw||(data.message&&data.message.text)||'');
   rawText.split(/\s+/).forEach(tok => { if (thirdPartyEmotes[tok]) urls.push(thirdPartyEmotes[tok]); });
   return [...new Set(urls)];
@@ -177,7 +166,6 @@ function buildAvatar(name, twitchColor, photoUrl) {
   const init        = esc((name || '?')[0].toUpperCase());
   const borderColor = getAvatarBorderColor(twitchColor);
   if (fd.avatarMode === 'twitch' && photoUrl) {
-    // Photo déjà en cache navigateur, pas de flash
     return `<div class="chat-avatar" style="border-color:${esc(borderColor)};position:relative">`
          + `<img class="av-photo" src="${esc(photoUrl)}" alt="${esc(name)}" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:inherit;">`
          + `</div>`;
@@ -214,7 +202,6 @@ async function addMsg(data, isTest) {
   const barColor  = getBarColor(twitchCol);
   const badgesHtml = buildBadges(data.badges||[]);
 
-  // Précharge avatar + emotes EN PARALLÈLE avant d'insérer dans le DOM
   const emoteUrls = isTest ? [] : collectEmoteUrls(data);
   const [photoUrl] = await Promise.all([
     (fd.avatarMode === 'twitch' && !isTest) ? fetchAvatar(name) : Promise.resolve(null),
@@ -225,6 +212,10 @@ async function addMsg(data, isTest) {
 
   const card = document.createElement('div');
   card.className = 'chat-msg';
+  // Classe animation entrée selon option
+  const animIn = fd.animIn || 'slideUp';
+  card.classList.add(`anim-in-${animIn}`);
+
   card.innerHTML =
     buildAvatar(name, twitchCol, photoUrl) +
     `<div class="chat-body">
@@ -249,7 +240,9 @@ async function addMsg(data, isTest) {
 
 function removeMsg(el) {
   el.classList.add('removing');
-  setTimeout(()=>el.parentNode?.removeChild(el),350);
+  const animOut = fd.animOut || 'slideDown';
+  el.classList.add(`anim-out-${animOut}`);
+  setTimeout(()=>el.parentNode?.removeChild(el), 300);
 }
 
 const TEST_POOL = [

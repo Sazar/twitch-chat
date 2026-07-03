@@ -21,13 +21,39 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
   align-items: flex-end;
   flex-shrink: 0;
   gap: 4px;
-  animation: msgIn .30s cubic-bezier(.22,1,.36,1) both;
   filter: drop-shadow(0 3px 12px rgba(0,0,0,.45));
 }
-.chat-msg.removing {
-  animation: msgOut .28s ease-in forwards;
-  pointer-events: none;
-}
+.chat-msg.removing { pointer-events: none; }
+
+/* ============================================================
+   ANIMATIONS ENTRÉE
+============================================================ */
+.anim-in-slideUp    { animation: animSlideUp    .32s cubic-bezier(.22,1,.36,1) both; }
+.anim-in-slideLeft  { animation: animSlideLeft  .32s cubic-bezier(.22,1,.36,1) both; }
+.anim-in-slideRight { animation: animSlideRight .32s cubic-bezier(.22,1,.36,1) both; }
+.anim-in-fadeIn     { animation: animFadeIn     .35s ease both; }
+.anim-in-popIn      { animation: animPopIn      .32s cubic-bezier(.34,1.56,.64,1) both; }
+
+@keyframes animSlideUp    { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+@keyframes animSlideLeft  { from { opacity:0; transform:translateX(-28px); } to { opacity:1; transform:translateX(0); } }
+@keyframes animSlideRight { from { opacity:0; transform:translateX(28px); } to { opacity:1; transform:translateX(0); } }
+@keyframes animFadeIn     { from { opacity:0; } to { opacity:1; } }
+@keyframes animPopIn      { from { opacity:0; transform:scale(.80); } to { opacity:1; transform:scale(1); } }
+
+/* ============================================================
+   ANIMATIONS SORTIE
+============================================================ */
+.anim-out-slideDown  { animation: animSlideDown  .28s ease-in forwards; }
+.anim-out-slideLeft  { animation: animOutLeft    .28s ease-in forwards; }
+.anim-out-slideRight { animation: animOutRight   .28s ease-in forwards; }
+.anim-out-fadeOut    { animation: animFadeOut    .28s ease-in forwards; }
+.anim-out-popOut     { animation: animPopOut     .28s ease-in forwards; }
+
+@keyframes animSlideDown  { from { opacity:1; transform:translateY(0);    } to { opacity:0; transform:translateY(18px);  } }
+@keyframes animOutLeft    { from { opacity:1; transform:translateX(0);    } to { opacity:0; transform:translateX(-24px); } }
+@keyframes animOutRight   { from { opacity:1; transform:translateX(0);    } to { opacity:0; transform:translateX(24px);  } }
+@keyframes animFadeOut    { from { opacity:1; } to { opacity:0; } }
+@keyframes animPopOut     { from { opacity:1; transform:scale(1);   } to { opacity:0; transform:scale(.80); } }
 
 .chat-avatar {
   flex-shrink: 0;
@@ -61,7 +87,6 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
   min-width: 0;
 }
 
-/* Pseudo à cheval : moitié au-dessus, moitié dans la bulle */
 .chat-topline {
   display: flex;
   flex-direction: row;
@@ -121,11 +146,6 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
   flex-direction: column;
   background: var(--msg-bg, rgba(15, 18, 45, 0.82));
   border-radius: 0 10px 10px 0;
-  /*
-    padding-top = juste assez pour que le pseudo ne chevauche pas le texte
-    = name-size * 0.55 (même facteur que margin-bottom)
-    padding serré sur les autres côtés
-  */
   padding: calc(var(--name-size, 15px) * 0.55) 10px 5px 8px;
   min-width: 0;
   max-width: var(--msg-max-w, 320px);
@@ -146,15 +166,6 @@ html, body { background: transparent; width: 100%; height: 100%; overflow: hidde
   vertical-align: middle;
   display: inline;
   margin: 0 1px;
-}
-
-@keyframes msgIn {
-  from { opacity:0; transform:translateY(8px) scale(.97); }
-  to   { opacity:1; transform:translateY(0)   scale(1);   }
-}
-@keyframes msgOut {
-  from { opacity:1; transform:translateX(0)    scale(1);   }
-  to   { opacity:0; transform:translateX(14px) scale(.95); }
 }
 
 :root {

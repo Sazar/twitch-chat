@@ -4,6 +4,30 @@
     "label": "Enable Test Messages",
     "value": false
   },
+  "animIn": {
+    "type": "dropdown",
+    "label": "Animation Entrée",
+    "value": "slideUp",
+    "options": {
+      "slideUp":    "Slide Up",
+      "slideLeft":  "Slide Left",
+      "slideRight": "Slide Right",
+      "fadeIn":     "Fade In",
+      "popIn":      "Pop In"
+    }
+  },
+  "animOut": {
+    "type": "dropdown",
+    "label": "Animation Sortie",
+    "value": "slideDown",
+    "options": {
+      "slideDown":  "Slide Down",
+      "slideLeft":  "Slide Left",
+      "slideRight": "Slide Right",
+      "fadeOut":    "Fade Out",
+      "popOut":     "Pop Out"
+    }
+  },
   "hideAfter": {
     "type": "number",
     "label": "Hide Message After (seconds)",
