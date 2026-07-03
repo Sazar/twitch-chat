@@ -43,12 +43,10 @@ function applyVars() {
   if (c) c.style.flexDirection = fd.scrollDirection==='right-to-left'?'row-reverse':'row';
 }
 
-/* Couleur barre gauche */
 function getBarColor(twitchColor) {
   return fd.borderColorType === 'custom' ? (fd.borderColor || '#539ef7') : twitchColor;
 }
 
-/* Couleur border avatar */
 function getAvatarBorderColor(twitchColor) {
   return fd.avatarBorderColorType === 'custom' ? (fd.avatarBorderColor || '#a78bfa') : twitchColor;
 }
@@ -225,7 +223,8 @@ function stopTestMessages() {
 window.addEventListener('onWidgetLoad',obj=>{
   widgetLoaded=true; fd=obj?.detail?.fieldData||{}; applyVars();
   const ch=obj?.detail?.channel; if(ch?.providerId)loadThirdPartyEmotes(ch.providerId);
-  if(fd.enableTestMessages==='yes')startTestMessages();
+  // checkbox renvoie true/false ou "true"/"false" selon SE
+  if(fd.enableTestMessages===true||fd.enableTestMessages==='true') startTestMessages();
 });
 window.addEventListener('load',()=>{setTimeout(()=>{if(!widgetLoaded)applyVars();},400);});
 window.addEventListener('onEventReceived',obj=>{

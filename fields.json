@@ -1,9 +1,8 @@
 {
   "enableTestMessages": {
-    "type": "dropdown",
+    "type": "checkbox",
     "label": "Enable Test Messages",
-    "value": "no",
-    "options": { "yes": "Yes", "no": "No" }
+    "value": false
   },
   "hideAfter": {
     "type": "number",
